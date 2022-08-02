@@ -1,13 +1,21 @@
-
-
 =========================================
 变量都有内存,内存里存放变量的实体值,左右引用都是保存变量的地址
 引进右值的唯一原因: 继承将亡值的遗产减小拷贝开销.右值引用的一切语义都基于这个原因
 右值是将亡值[字面量、中间值、不再需要的(std::move)],右值引用是拿到这个将亡值的地址
 左值引用和右值引用只是语法上的区别,运行时都同样指向变量的地址
-
 Reference Collapsing(引用折叠) in template or typedef: A&& && -> A&&, otherwise A&
 =========================================
+
+什么是模板?
+
+  模板是编译期需要和可以确定的东西,比如类型和常量,类型的concept与operator
+
+
+*****************************
+*                           *
+* 模板关键: 区分type和value *
+*                           *
+*****************************
 
 =========================================
 template<typename T, typename... Types>
@@ -80,36 +88,21 @@ template<typename _Tp> constexpr _Tp&& forward(typename std::remove_reference<_T
       return static_cast<_Tp&&>(__t);
     }
 
+template<typename _Tp> struct remove_extent { typedef _Tp     type; };
+template<typename _Tp> struct remove_extent<_Tp[]> { typedef _Tp     type; };
+template<typename _Tp, std::size_t _Size> struct remove_extent<_Tp[_Size]> { typedef _Tp     type; };
+
+template<typename _Tp, typename... _Args> inline typename _MakeUniq<_Tp>::__single_object
+    make_unique(_Args&&... __args) { return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...)); }
+
+template<typename _Tp> inline typename _MakeUniq<_Tp>::__array
+    make_unique(size_t __num) { return unique_ptr<_Tp>(new remove_extent_t<_Tp>[__num]()); }
+
+template<typename _Tp, typename... _Args>
+    inline typename _MakeUniq<_Tp>::__invalid_type make_unique(_Args&&...) = delete;
+
 =========================================
 Application
 =========================================
 
 =========================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

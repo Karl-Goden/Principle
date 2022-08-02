@@ -1,0 +1,97 @@
+allocator
+
+container
+
+    typename: value_type, size_type, difference_type, allocator_type
+              (const_)pointer, (const_)reference, (const_)(reverse_)iterator
+
+iterator: a pointer, just a pointer
+
+functor:
+
+    lambda:
+
+    bind:
+
+    plus[+], minus[-], multiplies[*], divides[/], modulus[%], negate[-]
+
+    equal_to[==], not_equal_to[!=], greater[>], less[<], greater_equal[>=], less_equal[<=]
+
+    logical_and[&&], logical_or[||], logical_not[!]
+
+    bit_and[&], bit_or[|], bit_xor[^], bit_not[~]
+
+adapter: stack, queue, priority_queue
+
+algorithm
+
+  Nonmodifying:
+
+    count, count_if
+
+    find, find_if, find_if_not
+
+    search_n: find n consecutive elements
+
+    search: two pair of iterator, Descartian find the first match
+
+    find_end: reverse match in above search
+
+    find_first_of, adjacent_find
+
+    max_element, min_element, minmax_element
+
+    equal, is_permutation, mismatch, lexicography_compare
+
+    is_sorted, is_sorted_until, is_partitioned, partitioned_point, is_heap, is_heap_until
+
+    all_of, any_of, none_of
+
+  Modifying:
+
+    copy, copy_if, copy_n, copy_backward, move, move_backward
+
+    transform
+
+    swap_ranges
+
+    fill, fill_n, generate, generate_n, iota: icrement
+
+    replace, replace_if, replace_copy, replace_copy_if
+
+  Removing:
+
+    remove, remove_if, remove_copy, remove_copy_if, unique, unique_copy
+
+  Mutating:
+
+    reverse, reverse_copy, rotate, rotate_copy
+
+    next_permutation, prev_permutation
+
+    shuffle, random_shuffle
+
+    partition, stable_partition, partition_copy
+
+  Sorting:
+
+    sort, stable_sort, partial_sort, partial_sort_copy, nth_element
+
+    make_heap, push_heap, pop_heap, sort_heap
+
+   For sorted range: binary_search, includes, lower_bound, upper_bound, equal_range, merge, inplace_merge
+
+                     set_union, set_interaction, set_difference, set_symmetric_difference
+
+  Numeric:
+
+    accumulate, inner_product, partial_sum, adjacent_difference
+
+iostream:
+
+    cin, cout, cerror, clog
+
+    manipulator: endl, ends, flush, ws
+
+    istream_iterator, ostream_iterator, eg: copy(istream_iterator<int>(cin), istream_iterator<int>(), ostream_iterator<int>(cout, " "));
+

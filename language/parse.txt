@@ -1,0 +1,10 @@
+recursive descent parser:
+
+  LL(n): look ahead n tokens, L1: read the input from left to right
+                              L2: decent into parse-tree children from left to right
+
+         左递归, eg r: r X;
+
+  Backtracking: 试错回返 specutive & rewind, use memoizing for perfomance
+
+  Predicated: context-sensitive, is P(X) true of flase

@@ -1,10 +1,32 @@
            Compiler Techniques
 
+All languages are equivalent. It is a truth universally utilized but not fully acknowledged.
+
 5 forms: Charactor -> Token -> AST -> IR -> As
 
 5 actions: scanner parser analyzer optimizer assembler
 
 3 modes: interpreter, virtual machine, target machine
+
+Frame:
+
+    parser{lexer, sema};
+
+    lexer::identifier, lexer::number, lexer::keyword, lexer::text
+
+    parser::parse, parser::expr, parser::stat, parser::block, parser::func
+    {
+        sema::onSomeAction();
+    }
+
+    sema: check, folder
+    {
+        Scope current; enterScope: current->parent, scope include symbol-table
+    }
+
+    ----------------------------optmize---------------------------
+
+    codegen
 
 virtual machine:
 

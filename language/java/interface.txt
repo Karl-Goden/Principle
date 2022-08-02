@@ -1,0 +1,70 @@
+                Interface
+
+接口是一种类型属性,可以类比为C++的traits,这就是able的concept
+
+java.lang.Cloneable: 什么也没有
+
+java.lang.Comparable<T>: int compareTo(T o);
+
+java.lang.Iterable<T>: Iterator<T> iterator();
+
+  default void forEach(Consumer<? super T> action);
+
+java.util.Iterator<E>: boolean hasNext(); E next();
+
+  default void remove();
+
+  default void forEachRemaining(Consumer<? super E> action);
+
+java.lang.CharSequence: int length(); char charAt(int index); CharSequence subSequence(int start, int end);
+
+  public String toString();
+
+java.lang.Runnable: abstract void run();
+
+java.util.Collection<E> extends Iterable<E>
+
+java.io.Serializable: 用于序列化,每个实现包含serialVersionUID, 不需要序列化的成员transient修饰
+
+java.lang.AutoCloseable: void close() throws Exception;
+
+java.io.Closeable: extends AutoCloseable, void close() throws IOException;
+
+java.io.Flushable: void flush() throws IOException;
+
+
+
+
+
+
+                Annotation
+
+注释也是一种类型属性,interface针对类型整体,annotation通常针对方法
+
+public interface Annotation;
+
+元属性:
+
+  RetentionPolicy起作用的时间: SOURCE, CLASS, RUNTIME
+
+  ElementType起作用的地点: TYPE, FIELD, METHOD, PARAMETER, CONSTRUCTOR, LOCAL_VARIABLE, ANNOTATION_TYPE, PACKAGE
+
+                           TYPE_PARAMETER, TYPE_USE(template since 1.8)
+
+因为是编译时属性,用户很难实现,主要集合在java.lang里
+
+java.lang:
+
+  @Override
+  @Deprecated
+  @SafeVararge
+  @SuppressWarnings
+  @FunctionalInterface
+
+java.lang.annotation:
+
+  @Native: native constant value for inlining
+  @Target: indicating ElementType
+  @Repeatable: indicating RetentionPolicy
+  @Inherited: meta-attribute for inherited annotation
+  @Documented: used by javadoc

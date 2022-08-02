@@ -1,0 +1,5 @@
+
+std::atomic_flag lock = ATOMIC_FLAG_INTI;
+LOCK:    while(lock.test_and_set());
+UNLOCK:  lock.clear();
+

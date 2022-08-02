@@ -1,0 +1,64 @@
+
+In 1937, Shannon's master degree thesis: A symbolic analysis of relay and switching circuit
+which shows electrical circuit can implement any boolean logic. This thesis becomes the
+foundation of digital circuit design to enable designers only care about logic manipulation.
+So the design process is:
+	1) write boolean logic
+	2) optimize it using boolean algebra
+	3) map logic gate to electronic circuits
+The only remained question is how to design arithemetic operation in boolean logic.
+
+Based on the above knowledge, we can create any computation in combinational logic.
+Except to memory in which we need to remember its previous state by a feedback circuit.
+But circuit is flow, dynamic and volatile.
+
+Latch VS Flip-Flop:
+	Clock width is the time interval during which clock it equal to logic 1.
+	Duty cycle is the ratio of the clock width to the clock period.
+	
+	Latch responds to input-changes during a clock width. While flip-flop during an edge.
+	So latch can execute multiple times in one cycle, flip-flop only once.
+
+There are 3 presentations for logic: schematic, boolean equation and truth table.
+
+Pipeline:
+
+	From fairest creatures we desire increase,
+	That thereby beauty's rose maight never die,
+	But as the riper should by time decease,
+	His tender heir might bear his memory.
+								--Sonnet 1 by Shakespeare.
+
+Bypass and Stall:
+
+	Stall occurs when next instruction's resource will not be ready at its pipeline stage.
+	Otherwise, we should forward the value to it. This process is call bypass since the
+	pipelined register is targeted to flow to terminal register.
+	
+	A register can receive 3 kinds of values:
+	IA: | f0 | f1 | f2 |
+	IB:      | f0 | f1 | f2 |
+	1) previous immediate def. For example, IA def x1 at 1, IB use x1 at 1
+	2) previous pipeline def. For example, IA def x1 at 1, IB use x1 at 2
+	3) no def in pipeline.
+	This value must be acquired at previous stage since use and def cannot exist
+	at the same stage.
+
+
+Q0: If there is any power leakage in the following example:
+    operand A and B share a regfile port:
+		A = port_value;  A = mux(0, port_value);
+	If A is not used, the latter value is always 0, so its inst user is static ?
+	but the mux and assign's hardware source are different.
+
+References:
+	1. Digital Logic and Microprocessor Design with Interfacing --Enoch O. Hwang
+	   A descriptive introductory book which is user friendly. He explain why
+	   always block must wrtie to a reg in 5.7.2 as far as i know no one do it.
+
+	2. Modern Computer Architecture and Orgnization --Jim Ledin
+	   A basic and complete introduction to computer organization.
+
+	3. Modern Processor Design --John Paul Shen
+	
+	4. Parallel Computer Organization and Design --Michel Dubois et al.

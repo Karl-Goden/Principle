@@ -1,0 +1,11 @@
+Gradient-Descent method:
+
+References：
+
+	Neural Networks and Deep Learning --Michael Nielson
+	A description of gradient-descent mothod from first principle.
+	
+	AI and Machine Learning for Coders --Laurence Moroney
+	A step-by-step tensorflow-based training textbook which tell some
+	basic informotion about image identifing, natural language processing
+	and sequence model.

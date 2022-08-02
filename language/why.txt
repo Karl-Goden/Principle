@@ -1,0 +1,29 @@
+               为什么这么设计
+
+[C] 数组为什么作为指针?
+
+    不用越界检查,不用存储长度,不用检查长度类型冲突,参考redis的sds实现
+
+[C] 为什么只到C99才支持可变长度数组VLA(variable length array)?
+
+    因为起初程序变量在开头声明,编译期就要确定栈空间大小
+    定义VLA后,在其后定义的变量还要多做一次间接寻址
+
+[C++] 为什么要引入右值引用?
+
+      为了在特定状况下移动资源而不是复制与销毁
+      注意:这是唯一的目的,除了这个目的没有其他目的
+
+[java] System.in, System.out, System.err === std::cin, std::cout, std::cerr
+
+[java] import n.* === using namespace n, import n.m === using n::m
+
+[lua] 字符串连接用".."不用"+", 因为整数和字符串可以转换,区分 2+3=5, 2..3=23
+
+[Python] 空格为什么要算语法? Guido est ein SB.
+
+[script] 脚本语言的一些特点
+
+    1) 动态类型
+
+    2) 一切兼字符串

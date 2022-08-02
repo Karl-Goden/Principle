@@ -1,0 +1,15 @@
+
+frondend:
+
+  lexer: tokenize
+
+  parser: lemon.c lempar.c
+
+  semantic: attach.c, auth.c, build.c, delete.c, expr.c, insert.c,
+            pragma.c, select.c, trigger.c, update.c, vacuum.c, where.c
+
+
+
+backend:
+
+  vdbe: virtual database engine

@@ -1,0 +1,108 @@
+This document will explain why Guido is so stupid. The reason
+is i don't undersatand a python module which is written by my
+cross-peacific colleague (including venv, pyinstaller, cffi,
+decorator, let alone a series of tricky classes all of which i
+have never heared before), since i must extend this module,
+i decide to deep into python thoroughly to see why python is 
+designed so disguisting (at least for me at present).
+
+1) Module and Packege: module is a .py file, package is a directory
+   containing an __init__.py file which declares which module's
+   which object can be exported. Just like a directory is a file,
+   package is also used as a module through import directive.
+   a) Module path is: current dir, built-in dir, built-in/site-packages.
+   b) Modules in a package is independent, so we should use module's
+      full name in import even two module share a package. At the first
+	  sight it seems redundant, but from the point of view of external,
+	  this mechanism expresent a simple find method. And __init__ should
+	  also import module's full name since package is just a general module.
+   c) __all__ can be used to export object by ‘from m import *’
+   d) module name __name__ is "__main__" if current module is being executed.
+	  Otherwise, i.e., if it is imported, the name if full name of module.
+
+2) Magic Method: __new__ is equivalent to operator new in C++, it is a
+   staticmethod, __init__ is equivalent to constructor function in C++, it is
+   executed only after the object is created by __new__. When we call __new__
+   and then receive this created object, we automatically invoke __init__.
+   __del__ is equivalent to destructor function in C++ against to __init__.
+   __enter__ and __exit__ is context manager which is used in with statement.
+
+3) MRO: method resolution order
+   1) old-style: depth-first left-to-right
+   2) new-style: a) subclass must before baseclass
+                 b) left baseclass must before right baseclass
+				 c) non class should be visited more than once
+		In hierarchy: class A; class B(A); class C(A, B);
+		Report a TypeError: Cannot create a consistent method resolution
+		since for class C's mro, A must before B for rule-b, and B must
+		before A for rule-a, so it is a conflict.
+   3) Super and revisiting new and init:
+	   super(A, B): return A's super class in mro of B, i.e., the next
+	   object or type of A in linearization of B's mro, if B is a type
+	   return a class type, else return an object. A is current class
+	   __class__, B is the first argument of current function.
+	   We show a multi-inheritence relationship:
+	   class A; class B(A); class C(B, A); class D(C);
+	   the mro of D is [D, C, B, A]
+	   
+	    class Car: // A singleton
+          _instance = None
+          def __new__(cls):
+            if cls._instance is None:
+  		      cls._instance = super().__new__(cls)
+            return cls._instance
+
+   4) Different between classmethod and staticmethod:
+		classmethod has an implicit argument(by decorator @classmethod),
+		i.e. class type, which is the class who is called on the method.
+		that is the defined class or its subclass.
+		staticmethod has no implicit argument. For example: __new___ is 
+		a static method, so we should pass cls explicitly:
+		def __new__(cls):
+			return super().__new__(cls);
+		In this code, super's return is also passed as argument.
+		
+		Python is a dynamic-type language, type-checking is on runtime,
+		so every class method resolution is executed at runtime, if we
+		can identify which class is choosed, we would invoke the associated
+		function, so class type is impilicitly passing in any method,
+		(regardless of classmethod, staticmethod or objectmethod).
+		
+4) * and **:
+   1) pass argument list and dict as by position and by name
+   2) receive parameter as list and dict for by position and by name
+
+   _ and __:
+   _ prefix cannot be imported by 'from module import *'.
+   __prefix is mangled by prefix __class in order not to be used accidently by subclass.
+
+   is and ==: 'is' is pysically equal, '==' is logically equal.
+
+   
+6) Type:
+   1) Builtin Type: list, tuple, set, dict
+   2) collections:
+        namedtuple('Card', ['rank', 'suite']);
+   3) typing:
+		template like list used as type annotation before 3.9 should be declared as 'List'.
+		Any
+
+8) cffi: C foreign function interface
+   a) dynamic
+       from cffi import FFI;
+	   ffi = FFI();
+	   ffi.cdef('int printf(const char*, ...)'); // to match the dll function
+	   dll = ffi.dllopen(None); // open std libc
+	   dll.printf(b"hello %s\n", ffi.new("char[]", b"world"));
+   b) static
+       from cffi import FFI;
+	   ffi = FFI();
+	   ffi.set_source(module_name, "", sources=[], libraries=[], include	-dirs=[], library-dirs=[]);
+	   ffi.cdef(...);
+	   
+	   from module_name import ffi, lib
+	   lib.call_function();
+
+10) Design Patterns:
+    a) Wrapper:
+	b) Mixin:

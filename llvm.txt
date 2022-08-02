@@ -1,194 +1,701 @@
-
-In the point of view of metalanguage, every component of a language is an expression.
-every component, even a type, has it's own value. That is the reason why LLVM return a
-Value at every node of AST. In general, Constant create constant values, Builder create
-built-in operations or keyword, +-*/, conversion, function calling, if/while/return etc...
-Function is registered in Module, Block is registered in Function.
-
-Intermediate Representation (IR): 一气化三清
-
-    in-memory compiler IR
-
-    on-disk bitcode representation [bc]
-
-    human readable form, low level language [llas]
-
-utility:
-    bitcode-file:  clang -emit-llvm -c xxx.c
-    lowlevel-file: clang -emit-llvm -S xxx.c
-    llvm-as:   ll -> bc
-    llvm-dis:  bc -> ll
-    llvm-link: link many bcs into one
-    lli:       interpreter of bc
-    llc:       compiler of bc/ll to assembly or object if –filetype=obj
-    opt:       analyzer and optimizer
-
-libs:
-
-    ADT: abstract data type
-
-    Analysis, Passes: analyzing utility
-
-    AsmParser: llas to Module
-
-    BinaryFormat, Object, ObjectYAML: Coff, ELF, Wasm
-
-    Bitcode, Bitstream: bitcode format, reader, writer, analyzer
-
-    IR: intermidiate representation
-
-    IRReader: IR(bitcode or llas) to Module, that means every file is a module.
-
-    LTO: link time optimize
-
-    MC, MCA: machine code & analysis
-
-    Target: various target machine
-
-ADT:
-
-    ilist: intrusive linked list
-
-IR:
-
-    LLVMContext: project-wise
-
-      LLVMContextImpl* pImpl:
-
-        Types, ConstantDatas, Modules
-
-    Modeule: file-wise
-
-        LLVMContext &Context;
-
-    Type:
-
-        LLVMContext &Context; //This refers to the LLVMContext in which this type was uniqued.
-        TypeID      ID;
-        unsigned    SubclassData;
-
-            IntegerType(LLVMContext &C, unsigned NumBits) : Type(C, IntegerTyID), SubclassData = NumBits
-
-            PointerType::get(Type *ElementType, unsigned AddressSpace)
-
-            FunctionType::get(Type *Result, ArrayRef<Type*> Params, bool isVarArg)
-
-    Value: Type *VTy, Use *UseList, char SubclassID: Subclass identifier (for isa/dyn_cast)
-
-           Use: Value *Val, User *Parent, Use *Next, Use **Prev: previous item's Next address
-
-           User: public Value
-                 This class defines the interface that one who uses a Value must implement.
-                 Each instance of the Value class keeps track of what User's have handles to it.
-
-           Constant: public User
-                     A constant is a value that is immutable at runtime.
-                     Functions are constants because their address is immutable. Same with global variables.
-                     Global variables is an address, so it can't be changed, but we can change the pointer value.
-
-           ConstantData: public Constant
-                     These constants have no operands; they represent their data directly, so it can be ConstantFolded
-
-               ConstantInt: APInt Val.
-
-               ConstantFP:  APFloat Val.
-
-               ConstantAggregateZero, ConstantPointerNull, ConstantTokenNone, UndefValue
-
-               ConstantDataSequential: ConstantDataArray ConstantDataVector
-
-           GlobalValue: public Constant(PointerType::get(Ty, AddressSpace), VTy, Ops, NumOps)
-                 value with attributes: LinkageTypes, VisibilityTypes, DLLStorageClassTypes, UnnamedAddr
-
-           GlobalVariable: public GlobalObject, public ilist_node<GlobalVariable>
-
-           GlobalIndirectSymbol: public GlobalValue
-           GlobalAlias: public GlobalIndirectSymbol, public ilist_node<GlobalAlias>
-           GlobalIFunc: public GlobalIndirectSymbol, public ilist_node<GlobalIFunc>
-                        Indirect function uses ELF symbol type extension to mark that
-                        the address of a declaration should be resolved at runtime by calling a resolver function.
-
-           Function: public GlobalObject, public ilist_node<Function>
-                     {
-                       BasicBlockListType BasicBlocks;
-                       size_t NumArgs; rgument *Arguments;
-                       ValueSymbolTable *SymTab;
-                       AttributeList AttributeSets;
-                     }
-
-                     Create(FunctionType *Ty, LinkageTypes Linkage, const Twine &N, Module &M)
-
-           Instruction: public User, public ilist_node_with_parent<Instruction, BasicBlock>
-
-           BasicBlock: public Value, public ilist_node_with_parent<BasicBlock, Function>:
-                       {InstListType InstList; Function *Parent;}
-                       A basic block is simply a container of instructions that execute sequentially.
-                       Basic blocks are Values because they are referenced by instructions such as branches and switch tables.
-                       The type of a BasicBlock is "Type::LabelTy" because the basic block represents a label to which a branch can jump.
-
-                       Create(LLVMContext &Context, const Twine &Name = "", Function *Parent = nullptr, BasicBlock *InsertBefore = nullptr)
-
-               void SetInsertPoint(BasicBlock *TheBB): This specifies that created instructions should be appended to the end of the specified block.
-               void SetInsertPoint(Instruction *I): This specifies that created instructions should be inserted before the specified instruction.
-               void SetInsertPoint(BasicBlock *TheBB, BasicBlock::iterator IP): This specifies that created instructions should be inserted at the specified point.
-
-                    Above 3 functions change the {BasicBlock *BB, BasicBlock::iterator InsertPt} of IRBuilder.
-
-
-ExcuteEnfine:
-
-  JIT:
-
-    InitializeNativeTarget
-
-    InitializeNativeTargetAsmPrinter: CodeGen
-
-    InitializeNativeTargetAsmParser:  MCParser
-
-    InitializeNativeTargetDisassembler: MCDisassembler
-
-    MCJIT: machine code  & OrcJIT: On request compile
-
-
-global variable: @
-local  variable: %
-       寄存器变量： 直接计算或加载
-       栈变量：     首先需要分配空间
-
-
-int k = 1;
-int add(int a)
-{
-    return k + a;
-}
-int main()
-{
-    return add(1);
-}
-
-clang -emit-llvm -S add.c
-
-@k = dso_local global i32 1, align 4
-
-; Function Attrs: noinline nounwind optnone uwtable
-define dso_local i32 @add(i32 %a) #0 {
-entry:
-  %a.addr = alloca i32, align 4
-  store i32 %a, i32* %a.addr, align 4
-  %0 = load i32, i32* @k, align 4
-  %1 = load i32, i32* %a.addr, align 4
-  %add = add nsw i32 %0, %1
-  ret i32 %add
-}
-
-; Function Attrs: noinline nounwind optnone uwtable
-define dso_local i32 @main() #0 {
-entry:
-  %retval = alloca i32, align 4
-  store i32 0, i32* %retval, align 4
-  %call = call i32 @add(i32 1)
-  ret i32 %call
-}
-
-
-Support:
+			LLVM
+
+Contents:
+
+Chapter 1: Build
+
+Chapter 2: IR
+
+Section 1: Architecture
+
+	Module is the parent of Function, Function is the parent of BasicBlock,
+	BasicBlock is the parent of Instruction. Instruction use Operand so it 
+	is a user, Operand is an Instruction or Constant. All the above class is 
+	Value, but only Instruction and below is a user, and we can use uselist to traverse the SSA.
+	Note Operator can simultaneouly express Instruction and ConstantExpr in use-chain.
+	There are 4 User classes: Operator, Instruction, Constant and DerivedUser.
+	There are 7 Constant classes: mainly ConstantData, ConstantExpr, GlobalValue
+	ConstantAggregate and BlockAddress.
+		a) ConstantExpr can use other Constant, but ConstantData is a single data item
+		   like (ConstantInt, ConstantFP, UndefValue).
+		b) ConstantAggregate include ConstantArray, ConstantStruct and ConstantVector.
+		b) GlobalObject and GlobalAlias inherite GlobalValue. Function, GlobalIFunc
+		   and GlobalVariable inherite GlobalObject.
+	GlobalIFunc is indirect function whose address is resolved in runtime after loading.
+	BlockAddress is presented as blockaddress(@function, %blockname);
+
+Section 2: Type & Value
+
+	In addition to the above User, Argument, BasicBlock and InlineAsm also inherite Value.
+	class Value {
+		Type *VType; // Value's data type, different with value's class type
+		Use *UseList; // Value's user list
+		unsigned char SubClassId; // Value's class type, defined in Value.def by enum ValueTy
+		unsigned NumUserOperand;
+		// class User is a wrapper of Value, it has no extended space but override
+		// operator new methed to allocate NumUserOperand operand Use pointers space.
+	};
+	class Use {
+		Use *Value;  // Parent use Value
+		Use *Next;   // Next and Prev create a dual-list.
+		Use **Prev;
+		User *Parent;
+	};
+	In summary, A Value maybe a User, or not a User. If it is a User, the User's allocator
+	will prepend a operand use-list before this Value. We should distinguish this list with
+	the Value's UseList field which indicates Value's used list but not Value's using list.
+	So we'd better call them UseList and OperandList from now on. OperandList is an array,
+	but UseList is a list, so Use's Next and Prev fiels are necessary.
+
+	class Type {
+		LLVMContext &Context;
+		enum TypeID ID;
+		unsigned NumContainedTypes;
+		Type *ContainedTypes; // complex types
+		enum TypeID {
+			// primitive
+			VariousFloat; // float 16, 32, 64, 80, 128
+			Void, Label, Metadata, Token;
+			// derived defined in DerivedType.h
+			Integer, Function, Pointer, Struct, Array, FixedVector, ScalableVector;
+		};
+	};
+
+Section 3: Instruction
+
+	There are 67 instructions defined in IR/Instruction.def.
+	UnaryOperator: Fneg
+	BinaryOperator:
+		arith: Add, FAdd, Sub, Fsub, Mul, FMul, UDiv, SDiv, FDiv, URem, SRem, FRem
+		logic: Shl, LShr, AShr, And, Or, Xor
+	Memory: Alloca, Load, Store, GetElementPointer, Fence, AtomicCmpXchg, AtomicRMW
+	Cast: Trunc, ZExt, SExt, FPToUI, FPToSI, UIToFP, SIToFP, FPTrunc, FPExt
+	      PtrToInt, IntToPtr, BitCast, AddrSpaceCat
+	Terminal: Br, CallBr, IndirectBr, Invoke, Ret, Resume, Switch, Unreachable
+	Compare: ICmp, FCmp
+	Aggregate: ExtractElement, InsertElement, ShuffleVector, ExtractValue, InsertValue
+	Wired: CleanupRet, CatchRet, CleanupPad, CatchPad, CatchSwitch, LandingPad, Freeze
+	Others: Call, PHI, Select, VAArg
+	
+	1) Difference between Br, IndirectBr, CallBr, Call and Invoke
+		Br can be conditional or unconditional, but the destination is block label.
+		If we branch based on a ptr value, this is call indirectbr. For example:
+		define i32 @foo(i8* %0) {
+		  entry：indirectbr i8* %0 [label %A, label %B, label %entry];
+		  A:     ret i32 1;
+		  B:     ret i32 0;
+		}
+		
+		CallBr try to pass the label to callee so that the callee function can direct
+		jump to the label. It is usually used by InlineAsm in which a group of assembly
+		instructions contain a jump. For example:
+		  %ret = callbr i32 asm "testl %1 %0; jne ${2:l}", "=r,r,i"(i32 %0, i8* label);
+		This asm test %0, if it is 0 jmp the desired label.
+		
+		In contrast to Call, Invoke can cause unwind. See the next segment.
+
+	2) Exception Handling
+		invoke @func() to label %succ unwind label %fail;
+		fail:
+			%ret = landingpad(ptr, i32)
+					cleanup
+					catch ptr @t1
+					catch ptr @t2
+			%id = extractvalue(%ret, 1);
+			switch(id) {
+			cast typeid(t1): ;
+			case typeid(t2): ;
+			default: resume {ptr, i32} %ret;
+			}
+
+Section 4: Intrinsic
+
+	Intrinsic function is declared in IR/Intrinsics.<Target>td.
+	In general, it is translated to target specific instruction.
+
+	class Intrinsic <list<LLVMType> ret_types,
+					 list<LLVMType> param_types = [],
+					 list<IntrinsicProperty> intr_propertied = [],
+					 string name = "",
+					 list<SDNodeProperty> sd_properties = [],
+					 bit disable_default_attributes = true> : SDPatternOperator
+	{
+		string LLVMName = name;
+		string TargetPrefix = "";
+		let properties = sd_properties;
+	}
+	
+Section 5: Attribute & Metadata
+
+	Only Function, Argument, and CallBase has Attribute to indicate how to optimize
+	it (noreturn, readonly, optnone...) and on GlobalVariable to indicate where to
+	locate it (bss, data). In general, attribute is just only a stringmap.
+
+	Metadata is much more complex structure than attribute. Every value can have a
+	metadata (which is protected method getMetadata(), setMetadata()) only can be
+	used by GlobalObject and Instruction. Module also has metadata (which is used by
+	getNamedMetadata() and setNamedMetadata()).
+
+	Metadata architecture is a recursive global data structure. MDNode (inheriting
+	Metadata) is a general interface structure which prepends N pointers of MDOperand
+	which only contains a pointer to Metadata so that Metadata can also be a MDNode.
+	So: 
+		MDNode is a list of Metadata.
+		MDString is a string Metadata. 
+		ValueAsMetadata is a Value which can be used as Metadata.
+		NamedMDNode contains a vector of MDNode pointers.
+	
+Chapter 3: Pass
+
+Section 1: PassManager
+
+	LagacyPassManager VS PassManager : option -enable-new-pm. Legacy is still
+	used in backend. The functionality of manager: Register, Construct, Pipeline.
+	Legacy:
+		Pass.h: define class Pass, FunctionPass, ModulePass.
+		PassInfo.h: excludingly describe a Pass, including its constructor.
+		PassSupport.h: macros defined Pass initialize function to register pass using PassInfo.
+		PassAnalysisSupport.h: define AnalysisUsage.
+		PassRegistry.h: keep PassInfo.
+		InitializePasses.h: declare Pass initialize functions which is called by opt.
+		IR/LagacyPassManager.h: define PassManager and FunctionPassManager.
+		Transform/IPO/PassManagerBuilder.h: choose Passes based on OptLevel.
+	New:
+		IR/PassManager.h: define PassManager, AnalysisManager and PassInfoMixin.
+		lib/Passes/PassRegistry.def: register Pass 
+		Passes/PassBuilder.h: register AnalysisManager and choose Passed based on OptimizationLevel.
+	
+	Q1: Why we need to register passes by {name, constructor}?
+	A1: a) We should have a mechanism to collect all the info of Passes.
+		b) When we indicate a pass name, for example, in opt commandline, we should find
+		   the specified Pass by this option. So we must register these pass before we
+		   execute opt in order to find it. And we can report error if the Pass not exist.
+
+	Q2: Why we need PassBuilder/PassManagerBuilder ?
+	A2: PassBuilder is a uniform interface to custom pass pipeline based on OptLevel so that
+		user need not to care about which group of ir passed should be add to PassManager.
+	
+	Q3: Why new-pm combine PassRegistry and PassBuilder into one PassBuilder class ?
+	A3: PassManager is just a manager ready to run, PassBuilder's function is to fill this
+		manager based on commandline (Pipeline & OptLevel). Now that PassBuilder must interact
+		with PassRegistry, why not combine them into one more coupled struct ? It is indeed ugly
+		to see IPO/PassManagerBuilder in CodeGen.
+
+	Q4: What is difference between legacy and new ?
+	A4: Apart from classify manager by type (Module, Function, Loop), new-pm have a AnalysisManager.
+		Every new Pass's run method receive carrier and its AnalysisManager. Return a PreservedAnalysis
+		if it is a PassManager, else return the analysized result. If it depends an AnalysisPass,
+		it call getResult<Pass>() to get info. But in legacy PassManager those two functionality
+		is divided into three functions: (1) void getAnalysisUsage(AnalysisUsage &AU) is used to decalre
+		what this pass required and preserved other analysis, (2) bool runOnCarried(Carrier&), the bool
+		return indicate if the analysis result except the preserved should be calculated in later pass.
+		(3) another getAnalysis<Pass>().getSpecificResult() to get the result.
+
+	Q5: Why we should declare dependency in legacy PassManager ?
+	A5: LegacyPassManager schedule(PMTopLevelManager::schedulePass) pass pipeline statically
+		(ahead of time), but NewPassManager schedule dynamically (just in time). So in legacy,
+		if we initailize a Pass, this Pass's dependency is automatically initailized. And we
+		don't explicitly declare it in InitializePasses.h and then call it.
+		
+	Q6: How the new pass implemented ？
+	A6: template<typename DerivedT> struct PassInfoMixin {
+			static StringRef name();
+			void printPipeline(); // print this pass name
+		};
+		template<typename DerivedT> struct AnalysisInfoMixin : PassInfoMixin<DerivedT>{
+			static AnalysisKey *ID() { return &DerivedT::Key; }
+			// We must define a Key in DerivedT, this Key indicate the identity of an AnalysisPass.
+			// Every legacy Pass class also has an char ID. Since we use these ID's pointer,
+			// We need not to care about ID's value. So new Pass's type is: struct alignas(8) {};
+		}
+
+	Q7: How to use PassInstrumentation ?
+	A7: Refer to RepeatedPass in IR/PassManager.h
+	
+Chapter 4: CodeGen
+
+Section 0: Pass Pipeline
+
+	legacy::PassManager CodeGenPasses;
+	CodeGenPasses.add(createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
+	TargetLibraryInfoImpl *TLII = createTLII(TargetTriple, CodeGenOpts);
+	CodeGenPasses.add(createTargetLibraryInfoWrapperPass(*TLII));
+	TM.addPassesToEmitFile(CodeGenPasses);
+	auto *MMIWP = new MachineModelInfoWrapperPass(TM);
+	TargetPassConfig *PassConfig = TM.createPassConfig(CodeGenPasses); // initialize CodeGen Passes
+	CodeGenPasses.add(PassConfig);
+	CodeGenPasses.add(MMIWP);
+	PassConfig.addISelPasses();
+	PassConfig.addMachinePasses();
+	FunctionPass *Printer = getTarget().createAsmPrinter(TM, ASMStreamer);
+	CodeGenPasses.add(Printer);
+	CodeGenPasses.add(createFreeMachineFunctionPass());
+	CodeGenPasses.run(Module);
+
+Sector 1: Instruction Selection
+
+	TargetPassConfig::addCoreISelPasses(): SelectionDAG, FastISel, GlobalISel.
+	
+	SelectionDAGISel::runOnMachineFunction::SelectAllBasicBlocks::SelectBasicBlock {
+		SelectionDAG *CurDAG;
+		SelectionDAGBuilder *SDB;
+		for (Instruction I : BB)
+			SDB.visit(I);
+		CurDAG.setRoot(SDB);
+		CodeGenAndEmitDAG {
+			CurDAG->Combine(before-legalize-types);
+			CurDAG->LegalizeTypes(1) -> DAGTypeLegalizer::run();
+			CurDAG->Combine(after-legalize-types);
+			CurDAG->LegalizeVectors() ->VectorLegalizer::Run();
+			CurDAG->LegalizeTypes(2);
+			CurDAG->Combine(after-legalize-vector);
+			CurDAG->Legalize() -> SelectionDAGLegalize::LegalizeOps();
+			CurDAG->Combine(after-legalize-dag);
+			DoInstructionSelection() -> override Select();
+			ScheduleDAGSDNodes *Scheduler->Run(CurDAG) -> override Schedule();
+			Scheduler->EmitSchedule() -> InstrEmitter::EmitNode();
+		}
+	}
+
+	SelectionDAG:
+
+		Difference between SDNode and SDValue: SDNode is like an Instruction in IR.
+		But unlike Instruction, A SDNode can have multiple results (In IR, multiple
+		results is represented as pointer argument or aggregate return value). So
+		SDValue is a SDNode coupled with a result number to indicate which result.
+		This is because we must build a graph or a chain of instructions based on
+		dependency relationship(data dependence, chain dependence, glue dependence).
+		For example, StoreInst is not used by other instruction, but there is a chain
+		between ISD::Store and its upcoming Node.
+		Dag is builded by SelectionDAGBuilder as an InstVisiter. The root node is the
+		latest SDNode which is being created so that we can trace this chain bottom-to-up.
+		We can use clang option -mllvm -view-dag-combine1-dags to view the highly fresh dag.
+		class SDNode {
+			int NodeType; // TargetISD < 0, LLVMISD > 0
+			SDUse *OperandList;
+			SDUse *UseList; 
+			EVT *ValueList; // Yes, Value only has a type. Value's User can create a SDValue.
+		};
+		Difference between EVT and MVT: MVT is declared in MachineValueTypes.h which
+		represents target machine's value type which is defined in ValueTyped.td. While
+		EVT is extended value type defined in ValueTypes.h which contains both MVT and
+		a LLVM::Type.
+		
+		Q0: How SelectionDAGBuilder fill the SelectionDAG ?
+		A1: Well. The SDB visit a BasicBlock top-down. From visitTargetIntrinsic we know HasChain
+			depends on if F->doesNotAccessMemory(). Memory accessing instructions create a chain.
+			Chain is the first operand and last value (whose type is MVT::Other) of a SDNode.
+			So MemSDNode::getChain(0) will return getOperand(0). Because Chain is the last value and
+			LoadInst still return its first value as loaded value, that is consistent with IR.
+			Every time SDB build a SDNode, it invokes SelectionDAG::getNode which push_back the
+			new created SDNode on AllNodes.
+
+		SelectionDAG has a CreateTopologicalOrder method using BFS algorithm to order SDNode.
+		and also a AssignTopologicalOrder to set a Node ID fot AllNodes and reorder by ID.
+		Q1: What is topological order, how to create it ?
+		A1: Topological order is a linear order of all nodes in a directed acyclic gragh.
+			The only condition is when E(u, v) is an edge from u to v, then u must before v.
+			Apparently a dag can have many topological orders.
+
+	DAGTypeLegalizer: LegalizeTypeAction TLI.getTypeAction(ResVT & OpeVT)
+		TypeLegal: is legal
+		TypePromoteInteger: replace this integer with a lager one.
+		TypeExpandInteger: split this integer into two of half the size.
+		TypePromoteFloat: replace this float with a lager one.
+		TypeExpandFloat: split this float into two of half the size.
+		TypeSoftenFloat: convert this float to a same size integer.
+		TypeSoftPromoteHalf: soften half to i16 and use float to do arithmetic.
+		TypeScalarizeVecor: replace this one-element vector with its element.
+		TypeSplitVector: split this vector with two of half size.
+		TypeWidenVector: widen into a larger vector (more element num).
+		TypeScalarizeScalableVecor: scalarize vector as we hope.
+
+	VectorLegalizer: LegalizeTypeAction TLI.getOperationAction(V.getOpcode())
+	SelectionDAGLegalize: Ditto
+		Legal:
+		Promote: execute in a larger type.
+		Expand: expand this to other ops, otherwise use libcall
+		LibCall: TLI.LowerCallTo(CallLoweringInfo(Node)); TLI.makeLibCall(Node);
+		Custom: TLI.LowerOperation(Node);
+
+	DoInstructionSelection: replace ISD::OPCODE with MachineOpcode Target::Inst.
+	<Target>DAGToDAGISel::Select(Node) {
+		if (Node->isMachineOpcode())
+			return;
+		Switch(Node->getOpcode()) {
+			// process tablegen uncapabled patterned node.
+		};
+		SelectCode(); // tablegen based on pattern match by -gen-dag-isel option.
+	}
+
+Section 2: Schedule
+
+	There are 2 scheduler, one on SDNode pre-RA-sched which is created by
+	createDefaultScheduler, another on MachineInst. So
+	class SUnit {
+		SDNode *Node;
+		MachineInstr *Instr;
+		SmallVector<SDep> Preds, Succs;
+	};
+	class SDep {
+		enum Kind { Data, Anti, Output, Order };
+		PointerIntPair<SUnit*, Kind> Dep;
+		
+		enum OrderKind {Barrier, MayAliasMem, MustAliasMem, Artificial, Weak, Cluster};
+		union {
+			unsigned Reg; // for Data, Anti, Output.
+			unsigned OrdKind; // for Order.
+		} Contents;
+		unsigned Latency;
+	};
+	class ScheduleDAG {
+		std::vector<SUnit> Sunits;
+	};
+	
+	ScheduleDAGTopologicalSort: detect whether two instructions has relationship.
+	SchedulePriorityQueue: who should be first if two instructions are independent.
+	ScheduleHazardRecognizer: dectect if there is hazard on instruction flow.
+	In summary, TopologicalSort is qualitative, PriorityQueue is quantitative. Both of
+	them is on instruction-grained, but HazardRecognizer is on pipeline.
+
+	We now concentrate on ScheduleDAGSDNodes:
+	(a) ScheduleDAGLinearize is a most trivial scheduler, it simply linearize DAG in
+		topological order and only considering Glue constraint.
+	(b) ScheduleDAGFast
+	
+	(c) ScheduleDAGRRList
+	
+	(d) ScheduleDAGVLIW
+
+Section 4: Opcode flow
+
+	Instruction: IR/Instruction.def, intrinsic is in auto generated by td in IR/Intrinsics.h.
+	|
+	|
+	(by)SelectionDAGBuilder generate DAG whose ISD Node type is all in only ISDOpcodes.h.
+	|   There is no specific opcode for current ISD Node. Intrinsic is packed in INTRINSIC_WO_CHAIN
+	|   INTRINSIC_W_CHAIN and INTRINSIC_VOID.
+	|
+	DAG: CodeGen/ISDOpcodes.h
+	|
+	|
+	(by) Legalizer：lower some ISD to specific TargetISD
+	|
+	|
+	DAG: CodeGen/ISDOpcodes.h + TargetISelLowering.h::TargetISD
+	|    isTargetOpcode distinguish these two class.
+	|
+	(by)SelectionDAGISel::DoInstructionSelection
+	|   SelectionDAG::SelectNodeTo() transform ISD and TargetISD to noted MachineInstr opcode.
+	|   isMachineOpcode can distinguish these two class.   
+	|
+	DAG: CodeGen/TargetOpcode.h and TargetInstr.td.
+	|
+	|
+	(by) CodeGen/InstrEmitter invoke BuildMI(TII.get(Opc))
+	|
+	|
+	MachineInstr: MachineOpcode defined by TargetInstrInfo.td in which every instruction 
+	|	Note there is a CodeGen/TargetOpcodes.h whose opcode is defined as PseudoInstruction
+	|   in Target/Target.td. These are some specific instructions which is general in all
+	|   target like phi, fence, inlineasm ... Those pseudo instruction and real instruction
+	|   info is generate to TargetGenInstrInfo.inc.
+	|
+	(by)AsmPrinter
+	|
+	|
+	MIInst
+	
+	Q0: What is the task of TargetLowering and TargetFrameLowering ?
+	A0: TargetLowering is a general interface telling ISel how to lower IR into MachineIR.
+		For example:
+		  LegalizeAction OpActions[MVT::VALUETYPE_SIZE][ISD::BUILTIN_OP_END] tell how to
+		  lower every operation on any value type.
+		  
+		  MVTTransformToType[MVT::VALUETYPE_SIZE] tell how to expand (i64 -> i32)or
+		  promote (i16 -> i32).
+		  
+		  LegalizeTypeAction ValueTypeActions[MVT::VALUETYPE_SIZE] tell how to lower
+		  every value type.
+		  
+		  TargetRegisterClass *RegClassForVT[MVT::VALUETYPE_SIZE] give a register class to legal type.
+		  MVT RegisterTypeForVT[MVT::VALUETYPE_SIZE] tell which register type is mapped.
+		  uint16_t NumRegistersFotVT[MVT::VALUETYPE_SIZE] tell how many mapped registers.
+		  
+		  Those attribute will be first initialized in TargetLoweringBase::initActions. After
+		  target specific settings (operation action), it will call TargetLoweringBase::
+		  computeRegisterProperties to custome it (register type action).
+		
+		uint16_t LoadExtActions[MVT::VALUETYPE_SIZE][MVT::VALUETYPE_SIZE] show how to exetend
+		load a small type to a big type register. There are EXTLOAD, SEXTLOAD and EXTLOAD(for float
+		or undefined integer), so the return value is a combination of LegalizeAction and these flag.
+		But trunc store need not care about those, so
+		LegalizeAction TruncStoreActions[MVT::VALUETYPE_SIZE][MVT::VALUETYPE_SIZE].
+		
+		uint16_t IndexedModeActions[MVT::VALUETYPE_SIZE][ISD::LAST_INDEXED_MODE]. Index mode include
+		pre/post_inc, pre/posr_dec. Index type include load, store, masked load and masked store. so
+		it also use a uint16_t as a combination of LegalizeAction and flag.
+		llvm.masked.load, llvm.masked.store
+		llvm.masked.gather, llvm.masked.scatter
+		llvm.masked.expandload, llvm.masked.compressstore
+		Those masked action is functioned on vector.
+		  
+		
+	Q1: How to match pattern in ISel ?
+	A1：TableGen -gen-dag-isel
+		CodeGenDAGPatterns.cpp & DAGISelMatcherGen.cpp
+
+	Q4: What is the task of FunctionLoweringInfo ?
+	A4: FunctionLoweringInfo is used in ISel to keep the info between IR, ISD and Machine...
+	    For example, it keep
+	
+	Some specific ISD Node which is generated by DAGBuilder:
+	0: CopyFromReg, CopyToReg: for PHINode between BasicBlock
+	1: EntryToken is entry, TokenFactor to aggregate multiple Node as a chain
+	2: FrameIndex to map AllocaInst, its stack slot info is in MachineFrameInfo
+	6: INTRINSIC_W_CHAIN, INTRINSIC_WO_CHAIN, INTRINSIC_VOID encapsulate intrinsic
+
+Section 5: Target & MC
+
+	There are several initailizing functions which must be executed at first declared in
+	Support/TargetSelect.h.
+	
+	1) TargetInfo create a static target and register it. Every main target have many
+	targets to indicate different architectures. For example: riscv32, riscv64, x86, x86-64.
+	class Target is defined MC/TargetRegistry.h which contains a series of constructor
+	functions. Every specific target will register its customized and subclassed utilities
+	constructor. These components coordinate together to support backend machine code.
+
+	2) TargetMachine is defined in Target/TargetMachine.h which is used to describe a target.
+	   class Target is only a construtors keeper. But TargetMachine contains {
+		 DataLayout;
+		 Triple;
+		 MCAsmInfo;
+		 MCRegisterInfo;
+		 MCInstrInfo;
+		 MCSubtargetInfo;
+	   };
+
+	   Any compiler must at first InitializeAllTargetInfos or specific target, and then custom
+	   specific component, and then use Triple to find Target by TargetRegistry::lookupTarget,
+	   and then Target.createTargetMachine(Triple, CPU, Features, RM, CM, OL, Jit);
+	   Note: I'm wrong, main function should call constructor InitLLVM(argc, argv) first.
+
+	3) AsmPrinter lower MachineInstr to MCInst and then emit it to MCStreamer.
+
+	   We should differentiate between MCStreamer and TargetMCStreamer. MCStreamer
+	   is a interface to emit MC series class (for instance MCInst, MCSymbol, etc)
+	   to assembly (implemented by MCAsmStreamer) or object (by MCObjectStreamer which
+	   is also subclassed by MCELFStreamer, MCXCOFFStreamer since different object
+	   file have different format). TargetMCStreamer is a helper function to tune
+	   some specific behavior in MCStreamer.
+	
+	   MCAssembler receive MCAsmBackend, MCCodeEmitter and MCObjectWritter.
+	   MCAsmBackend is to emit nop or fixup. MCCodeEmitter only encode a MCInst to
+	   raw_stream. But MCObjectWritter write layout. So every object subclass it.
+	   Just like MCStreamer and TargetMCStreamer, there is a TargetObjectWriter in 
+	   MCObjectWritter to write target specific info.
+	   
+	   MCObjectStreamer receive MCAsmBackend, MCCodeEmitter and MCObjectWritter to build
+	   a MCAssembler. MCAsmStreamer only need a MCInstPrinter to print assembly code to
+	   raw_stream. But if we need inst encode info, we need MCAssembler to encode it.
+	   So MCAsmStreamer also should create a MCAssembler.
+
+	   TD: some peudo instruction using PseudoInstExpansion can be auto-generated function
+	       bool TargetAsmPrinter::emitPseudoExpansionLowering(MCStreamer&, MachineInstr*)
+		   in PseudoLoweringEmitter.cpp by pattern.
+	   
+	5) AsmParser convert assembly code to MCInst and then emit it (as object code)to MCStreamer.
+	
+	   TD: In MatchAndEmitInstruction it invoke auto-generated MatchInstructionImpl by
+	       AsmMatchecrEmitter.cpp.
+
+	6) Disassembler convert object code to MCInst.
+	
+	   TD: In getInstruction it invoke auto-generated decodeInstruction by DisassemblerEmtter.cpp
+	       and DecodeEmitterGen.cpp.
+	
+	7) InstPrinter convert MCInst to assembly code
+	
+	   TD: In printInst it invoke auto-generated printInstruction by AsmWritterEmitter.cpp and
+	       AsmWritterInst.cpp.
+
+	8) MCCodeEmitter convert MCInst to object code
+	
+	   TD: In encodeInstruction it invoke auto-generated getBinaryCodeForInstr by CodeEmitterGen.cpp.
+
+	9) InstrInfo
+	
+	10) RegisterInfo
+	
+	11) TargetSubtarget subclass TargetGenSubtargetInfo which also subclass MCSubtargetInfo and is
+	    auto-generated by SubtargetEmitter.cpp.
+
+		SubTargetInfo is definitely decided by 3 function attibutes: target-cpu, target-tunecpu, target-features. 
+		target-features is used to indicate a feature-list of a ISA to support instruction selection.
+		target-cpu/tunecpu is used to choose a processor model to support instruction schedule.
+		target-abi is a module flag.
+
+	Q0: What an assembly and object file contains ?
+	A0: An assembly file contains instruction, directive, symbol, label, comment.
+		An object file contains a header, a list of sections and an appending section header table.
+		In llvm, MCAssembler contains all these infomation.
+		class  MCAssembler {
+			MCAsmBackend Backend;    // asm Fixup
+			MCCodeEmitter Emitter;   // emit MCInst
+			MCObjectWritter Writter; // write MCLayout
+			std::vector<MCSection> Sections;
+			std::vector<MCSynbol> Symbols;
+		};
+		MCSection has many subsections, i.e., MCFragment.
+		
+		Fixup is concerned about position of symbol. For example when we cannot jump to a
+		destination or cannot load a global or thread relative variable in a simple
+		instruction, all of those symbol's address is assured only in link time. Or we
+		need a nop to skip the hazard.
+	
+	
+Section 6: How to lower a function ?
+
+	SelectionDAGISel: select MachineInst
+	|
+	|
+	
+	
+Section 7: td
+
+	What is operand ?
+	What is register ?
+	What is instruction ?
+	How to represent them ?
+	How to describe a processor ?
+	
+	Every target includes 6 kind of td files: InstrInfo.td, RegisterInfo.td
+	Schedule.td, Features.td, Processor.td and CallingConvention.td.
+	1) Features.td define SubtargetFeature which is used to indicate all features
+	   target support, for instance: sse, avx. It also define a Predicate used
+	   by ProcessorModel.
+
+	2) Processor.td define ProcessorModel which include SchedMachineModel and
+	   SubtargtFeatures for a specific machine.
+
+	3) Schedule.td define Itinerary or Sched which can be used in defining Instr.td.
+
+	4) RegisterInfo.td: Register is a container.
+	   class Register<string n, list<string> altNames = []> {
+	     string Namespace = ""; // to indicate target
+		 string AsmName = n;
+		 list<string> AltNames = altNames;
+		 list<Register> Aliases; // overlaps with this
+		 
+		 list<Register> SubRegs; // direct subreg
+		 list<SubRegIndex> SubRegIndices; // SubRegIndex<int size, int offset = 0>
+		 bit CoveredBySubRegs;
+		 
+		 bit isConstant;
+		 bits<16> HwEncoding;
+	   }
+	   Register is inherently an ID (like 24601 to Jean Valjean) which is auto-generated
+	   by RegisterInfoEmitter.cpp. Its declaration is in MC/MCRegister.h and CodeGen/Register.h.
+
+	   class DAGOperand {
+	     string DecoderMethod;
+	   }
+	   
+	   class RegisterClass<string namespace, list<ValueType> regTypes, int alignment,
+	                       dag regList> : DAGOperand {
+	     
+	   }
+	   
+	   Note RegisterClass inherit DAGOprand, this is used to match instruction pattern.
+	   class Operand<ValueType ty> also inherit DAGOperand to implemente imm operand {
+	     string PrintMethod;
+	     string EncoderMethod;
+		 AsmOperandClass ParserMatchClass;
+	   }
+	   
+	   class AsmOperandClass is used to help convert assembly to MCOperand {
+	     string PredicateMethod;
+		 string RenderMethod;
+		 string ParserMethod;
+	   }
+
+	5) InstrInfo.td describe instructions: formats, pattern.
+	
+	6) CallingConv.td
+
+Chapter 6: Clang
+
+Section 0: OptionFlow
+
+Section 1: Driver
+
+	tools/Driver/driver.cpp:main
+
+Section 2: Type
+
+Section 3: AST
+
+	Expr is a ValueStmt.
+
+Section 4: Builtin
+
+	Builtin function is defined in Basic/Builtins<Target>.def. We can define builtin
+	function freely, i.e., it can have a flexible signature, but we should sematicize
+	it first in Sema/SemaChecking.cpp and also define codegen function in CodeGen/CGBuiltin.cpp.
+	In general, builtin function is translated to intrinsic functions. Ref C2S4.
+
+Section 5: ABI: Name Mangling, Calling Convention, Exception Handling, Object Layout.
+
+Chapter 7: TableGen
+
+	register by TableGen::Emitter::OptClass<C> which is managed by Support/ManagedStatic.
+	
+	Keyword class is used to define a type, def is used to defined a object of class.
+	Like c++, in defined object, class name can have an initailizer-list with <>.
+	Class can also inherit super class by ':', you can override class or father's field by let.
+
+	Basic data types are: bit, bits<n>, int, string, list<T>, dag(opc ope ...), code[{}].
+
+Chapter 8: Argument
+
+Section 1: clang
+
+	-### can list command invoked by clang driver.
+	-mllvm: pass option to llvm ir or backend.
+	-Xclang: pass option to clang frontend -cc1. For instance:
+	  -ast-dump: dump ast
+	  -disable-O0-optnone: don't add optnone attribute for function when O0 is enable.
+	  
+Section 2: llvm
+
+	-enable-new-pm|bugpoint-enable-legacy-pm: choose by opt.
+	-debug-pass=Arguments|Structure|Executions|Disabled.
+	-debug: output LLVM_DEBUG info.
+	-print-after-all: print ir after every pass.
+
+Chapter 9: Language
+
+Section 5: Scoping and Binding
+
+	When we refer a variable by its name, which variable is refered ? For example:
+	int i = 0;
+	int foo() {
+		return i;
+	}
+	int bar() {
+		int i = 1;
+		return foo();
+	}
+	Which value is returned by bar ?
+	In function foo if variable i is binded as global variable (at static compile time),
+	it's called static scoping or lexical scoping. And if it is resolved as local variable
+	i in function bar, it's called dynamic scoping (at dynamic runtime).
+
+References:
+
+	Programming Language Pragmatics --Michael Scott.
+
+	Automatic Parallelization --Samuel MidKiff
+	This books is one of Systhesis Lectures on Computer Architecture and the only book
+	i've encountered which concentrate on auto parallelization in compiler optimization.

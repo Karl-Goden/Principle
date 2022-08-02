@@ -1,0 +1,144 @@
+        Assembly
+
+-----------------------
+int i = 256;
+
+int add(int a, int b)
+{
+    return a + b * i;
+}
+-----------------------
+    .file   "a.c"
+    .globl  i
+    .data
+    .align 4
+    .type   i, @object
+    .size   i, 4
+i:
+    .long   256
+    .text
+    .globl  add
+    .type   add, @function
+add:
+.LFB0:
+    .cfi_startproc
+    pushq   %rbp
+    .cfi_def_cfa_offset 16
+    .cfi_offset 6, -16
+    movq    %rsp, %rbp
+    .cfi_def_cfa_register 6
+    movl    %edi, -4(%rbp)
+    movl    %esi, -8(%rbp)
+    movl    i(%rip), %eax
+    imull   -8(%rbp), %eax
+    movl    %eax, %edx
+    movl    -4(%rbp), %eax
+    addl    %edx, %eax
+    popq    %rbp
+    .cfi_def_cfa 7, 8
+    ret
+    .cfi_endproc
+.LFE0:
+    .size   add, .-add
+
+    .ident  "GCC: (GNU) 4.8.5 20150623 (Red Hat 4.8.5-44)"
+    .section    .note.GNU-stack,"",@progbits
+-----------------------
+
+Directive: begin with '.', metadata or structed info for link, load and debug
+
+    .globl, .align, .type, .size, .long, .comm
+
+    .file, .data, .text
+
+    .cfi: Call Frame Instruction
+
+      CFA: Canonical Frame Address, 什么叫Canonical,就是调用call指令时caller帧的esp
+
+      .cfi_startproc, .cfi_endproc
+
+      .cfi_def_cfa_offset 16: 此时rsp距CFA的长度为16,包括返回地址及被压栈的rbp
+
+      .cfi_offset 6, -16: 将6号寄存器即rbp放入CFA-16内存中,即pushq %rbp命令
+
+      .cfi_def_cfa_register 6: 将6号寄存器即rbp当作CFA的基址寄存器,move %rsp, %rbp后,rbp又可以用了
+
+      .cfi_def_cfa 7, 8: 将7号寄存器即rsp加8当作CFA的基址寄存器
+
+Label: end with ':'
+
+    global varible
+
+    inner label:
+
+        .LFB: function begin label
+
+        .LFE: function end label
+
+        .LBB: block begin label
+
+        .LBE: block end label
+
+        .LC:  readonly label
+
+Frame Stack:
+
+    +-------------+
+    | argument 0  |
+    +-------------+
+    | argument 1  |
+    +-------------+
+    | return addr | call: push %rip + 4; jmp func;
+    +-------------+
+    |  prev  rbp  |       push %rbp;
+    +-------------+
+    |   .......   |       pop  %rbp;
+    +-------------+
+    |     ret     | ret:  pop %rip
+    +-------------+
+
+Instruction:
+
+    register:
+
+        x86[8](al cl dl bl ah ch dh bh spl bpl sil dil r8b - r15b)
+
+        x86[16](ax cx dx bx sp bp si di r8w - r15w)
+
+        x86(eax ecx edx ebx esp ebp esi edi r8d - r15d)
+
+        x64(rax rcx rdx rbx rsp rbp rsi rdi r8 - r15)
+
+        xmm0 - xmm15: 128位, 常用于浮点及SIMD
+
+    frame:
+
+        pushq %rbp
+        movq  %rsp, %rbp
+        ...
+        popq %rbp
+
+    type: b[byte1], w[word2], l[long4], q[quad8], ss[scalar single-precision4], sd[scalar double-precision4]
+
+指令类别:
+
+    数据传送: move, push, pop, load, store
+
+    算术逻辑: add, sub, mul, div
+
+    字符串运算
+
+    控制流
+
+    处理器控制
+
+寻址方式:
+
+    立即寻址: addl $3, %eax
+
+    寄存器寻址: addl $3, %eax
+
+    相对位置寻址: 寄存器加括号, imull -8(%rbp), %eax
+
+    绝对位置寻址: movl global, %eax
+

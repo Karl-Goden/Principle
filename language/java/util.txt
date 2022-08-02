@@ -1,0 +1,45 @@
+
+[function]
+
+java.util.function.Function<T, R>: R apply(T t);
+
+  default <V> Function<V, R> compose(Function<? super V, ? extends T> before)
+      return (V v) -> apply(before.apply(v));
+
+  default <V> Function<T, V> andThen(Function<? super R, ? extends V> after)
+      return (T t) -> after.apply(apply(t));
+
+  static <T> Function<T, T> identity()
+      return t -> t;
+
+java.util.function.Predicate<T>: boolean test(T t);
+
+  default Predicate<T> and(Predicate<? super T> other)
+      return return (t) -> test(t) && other.test(t);
+
+  default Predicate<T> or(Predicate<? super T> other)
+      return (t) -> test(t) || other.test(t);
+
+  default Predicate<T> negate()
+      return (t) -> !test(t);
+
+  static <T> Predicate<T> isEqual(Object targetRef)
+      return (null == targetRef) ? Objects::isNull : object -> targetRef.equals(object);
+
+
+java.util.function.Consumer<T>: void accept(T t);
+
+  Consumer<T> andThen(Consumer<? super T> after); //往后链接
+      return (T t) -> { accept(t); after.accept(t); };
+
+java.util.function.Supplier<T>: T get();
+
+java.util.function.BiFunction<T, U, R>: R apply(T t, U u);
+
+
+
+
+
+
+
+

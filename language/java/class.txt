@@ -1,0 +1,35 @@
+             类型与类类型
+
+每个对象都有类型与值(type & value),在java中分为原始类型和对象类型
+原始类型适时可转化为对象类型,如:
+  primitive: void, boolean, char, float, double, byte, short, int, long
+  wrapper: Void, Boolean, Character, Float, Double, Byte, Short, Integer, Long
+所有的数据类型用java.lang.Class<T>表示,我称它为类类型
+数据类型关键字class,enum,interface,annotation(@interface),primitive,这些叫做类型
+其中primitice,class和enum内部为具体实现value
+annotation是特殊的interface,它俩只需要type,不需要value,因为他们只是个声明而没有实现
+所以interface只能包含静态变量而且不能实现成员函数,这是它与abstract class的区别
+abstract class与class的区别是它的函数可以不用实现
+后续为支持扩展interface引入了default和static方法,它俩的区别是default可以继承
+
+
+public final class Class<T> implements java.io.Serializable, GenericDeclaration, Type, AnnotatedElement
+{
+
+  public T newInstance() throws InstantiationException, IllegalAccessException;
+
+  public native boolean isPrimitive();
+  public native boolean isArray();
+  public native boolean isInterface();
+
+  public boolean isAnnotation();
+  public boolean isSynthetic();
+
+  public native boolean isInstance(Object obj);
+  public native boolean isAssignableFrom(Class<?> cls);
+  public native Class<? super T> getSuperclass();
+
+  public Class<?>[] getInterfaces();
+
+}
+

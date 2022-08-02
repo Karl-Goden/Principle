@@ -1,0 +1,31 @@
+computer:
+
+  cpu, register, cache, memory, I/O
+
+  control unit, arithmetic logic unit, memory, adapter(input, output), bus
+
+architecture: cisc[Intel x86, Motorola 680x0], risc[Sparc, MIPS, PowerPC, HP Precision, DEC Alpha]
+
+  instruction, register, interrupt
+
+  cache: instruction, data, level
+
+  pipeline: CISC: fetch, decode, load, compute, store
+
+            MIPS: IF<instruction fetch>, RD<read register>, ALU, MEM<read/write cache>, WB<write back register>
+
+operating system
+
+  process, memory, filesystem, network, driver
+
+compiler
+
+  lexer, parser, semitizer, optimizer, generator
+
+database
+
+  model, acid, data-structure, storage
+
+graphics
+
+  modeling, rendering, animation, human-computer insteraction, computer vision

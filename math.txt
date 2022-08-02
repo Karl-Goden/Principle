@@ -1,0 +1,11 @@
+	Math
+
+The core of mathematic is to combine the abstract model with the material
+and by linking the most of abstract models to uncover the reality of world.
+A common error-prone point-of-view is the abstract model is unalignmented,
+unrecognizable, unacceptable in intuition. This is a question of intuition
+but not the mathematic model. Since intuition is always the first expression
+or a long wrong history of bounded thinking.
+
+The key of an algorithm is to find its fixed point. The fixed point is
+a structure property which belongs to the algebra branch of mathematics.

@@ -1,0 +1,4 @@
+traits作用于类型属性
+
+
+is_trivially_copyable: memcpy(sizeof type)能不能用

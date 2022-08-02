@@ -1,0 +1,56 @@
+
+core:
+
+  ngx_pool_t:
+    {
+      ngx_pool_data_t       d;
+      size_t                max;       /* Bound between small and large type */
+      ngx_pool_t           *current;   /* */
+      ngx_chain_t          *chain;     /* used by ngx_buf_t */
+      ngx_pool_large_t     *large;     /* simple list, meta by ngx_palloc_small, data by ngx_alloc */
+      ngx_pool_cleanup_t   *cleanup;   /* close or delete file */
+      ngx_log_t            *log;
+    }
+
+    typedef struct {
+        u_char               *last;
+        u_char               *end;
+        ngx_pool_t           *next;
+        ngx_uint_t            failed;
+    } ngx_pool_data_t;
+
+    +------------------+-------------------+           +------------------+-------------------+
+    | meta: ngx_pool_t | data: last -- end | --next--> | meta: ngx_pool_t | data: last -- end |
+    +------------------+-------------------+           +------------------+-------------------+
+
+    ngx_palloc: ngx_palloc_small or ngx_palloc_large based on malloc size
+
+    ngx_palloc_small: find useable space[size < end - last], otherwiae alloc a subpool and list it
+
+    ngx_pmemalign, ngx_pfree: ngx_palloc_large
+
+    ngx_reset_pool: free large, reset small
+
+  ngx_array_t: dynamic vector, c++'s vector
+
+  ngx_list_t: list of vector, c++'s queue
+
+  ngx_buf_t:
+    {
+        u_char          *start;         /* start of buffer */
+        u_char          *end;           /* end of buffer */
+    }
+
+  ngx_radix_tree_t:
+
+
+
+event:
+
+os: unix, win32
+
+  unix: darwin, freebsd, linux, posix, solaris
+
+stream
+
+http, mail

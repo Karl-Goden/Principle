@@ -1,0 +1,63 @@
+
+Class<T> & Object: type & value
+
+  Object: equals, toString: 继承时override
+
+
+
+Throwable: implements java.io.Serializable
+
+  detailMessage & cause & stackTrace
+
+Error:     extends java.io.Throwable
+Exception: extends java.io.Throwable
+
+[reflect: 动态加载class,类似于dlopen
+
+
+Array: final
+
+    private static native Object newArray(Class<?> componentType, int length);
+
+    private static native Object multiNewArray(Class<?> componentType, int[] dimensions);
+
+    public static native int getLength(Object array);
+
+    public static native Object get(Object array, int index);
+
+    public static native void set(Object array, int index, Object value);
+
+    数组里放入的是Object指针,primitive类型可能是原始实现因为有各类有单独的set,get接口
+
+    为什么要把Array放到这里?
+
+    因为其他类型只需要用Type[]就可以了,没必要关心它的实现,只有在invoke
+
+
+
+
+Number: abstract, implements java.io.Serializable
+
+        byte, short, int, long, float, double: 数量之间转化
+
+String: implements java.io.Serializable, Comparable<String>, CharSequence
+
+  private final char value[];
+
+  insert, append, delete, replace
+
+AbstractStringBuilder: implements Appendable, CharSequence
+
+  char[] value; // strbuff
+  int count;    // used
+
+StringBuffer:  extends AbstractStringBuilder implements java.io.Serializable, CharSequence
+
+  synchronized,toString时使用缓冲
+
+StringBuilder: extends AbstractStringBuilder implements java.io.Serializable, CharSequence
+
+  单线程,toString时不使用缓冲
+
+
+Math:
