@@ -1,0 +1,115 @@
+
+
+=========================================
+变量都有内存,内存里存放变量的实体值,左右引用都是保存变量的地址
+引进右值的唯一原因: 继承将亡值的遗产减小拷贝开销.右值引用的一切语义都基于这个原因
+右值是将亡值[字面量、中间值、不再需要的(std::move)],右值引用是拿到这个将亡值的地址
+左值引用和右值引用只是语法上的区别,运行时都同样指向变量的地址
+
+Reference Collapsing(引用折叠) in template or typedef: A&& && -> A&&, otherwise A&
+=========================================
+
+=========================================
+template<typename T, typename... Types>
+void print(T firstArg, Types... args)
+{
+    std::cout << firstArg << "\n";
+    if(sizeof...(args) > 0) //c++17 compile-time if, otherwise print() should be given
+    {
+        print(args...);
+    }
+}
+
+eg:
+  bool is(TokenKind K) const { return Kind == K; }
+  bool isOneOf(TokenKind K1, TokenKind K2) const {
+    return is(K1) || is(K2);
+  }
+  template <typename... Ts>
+  bool isOneOf(TokenKind K1, TokenKind K2, Ts... Ks) const {
+    return is(K1) || isOneOf(K2, Ks...);
+  }
+=========================================
+
+
+Header:type_traits
+=========================================
+template<typename _Tp, _Tp __v>
+struct integral_constant
+{
+    static constexpr _Tp                  value = __v;
+    typedef _Tp                           value_type;
+    typedef integral_constant<_Tp, __v>   type;
+    constexpr operator value_type() { return value; }
+};
+typedef integral_constant<bool, true>     true_type;
+typedef integral_constant<bool, false>    false_type;
+
+
+template<bool, typename _Tp = void> struct enable_if{ };
+template<typename _Tp> struct enable_if<true, _Tp> { typedef _Tp type; };
+
+template<bool _Cond, typename _Iftrue, typename _Iffalse> struct conditional { typedef _Iftrue type; };
+template<typename _Iftrue, typename _Iffalse> struct conditional<false, _Iftrue, _Iffalse> { typedef _Iffalse type; };
+
+template<typename _Tp> struct remove_const { typedef _Tp type; };
+template<typename _Tp> struct remove_const<_Tp const> { typedef _Tp type; };
+template<typename _Tp> struct add_const { typedef _Tp const type; };
+/* remove_volatile linkewise */
+template<typename _Tp> struct remove_cv { typedef typename remove_const<typename remove_volatile<_Tp>::type>::type type;};
+template<typename _Tp> struct add_cv { typedef typename add_const<typename add_volatile<_Tp>::type>::type type;};
+
+template<typename> struct is_lvalue_reference: public false_type { };
+template<typename _Tp> struct is_lvalue_reference<_Tp&>: public true_type { };
+template<typename> struct is_rvalue_reference: public false_type { };
+template<typename _Tp> struct is_rvalue_reference<_Tp&&>: public true_type { };
+
+template<typename _Tp> struct remove_reference { typedef _Tp type; };
+template<typename _Tp> struct remove_reference<_Tp&> { typedef _Tp type; };
+template<typename _Tp> struct remove_reference<_Tp&&> { typedef _Tp type; };
+
+template<typename _Tp> constexpr typename std::remove_reference<_Tp>::type&& move(_Tp&& __t) noexcept
+    { return static_cast<typename std::remove_reference<_Tp>::type&&>(__t); }
+
+template<typename _Tp> constexpr _Tp&& forward(typename std::remove_reference<_Tp>::type& __t) noexcept
+    { return static_cast<_Tp&&>(__t); }
+template<typename _Tp> constexpr _Tp&& forward(typename std::remove_reference<_Tp>::type&& __t) noexcept
+    {
+      static_assert(!std::is_lvalue_reference<_Tp>::value, "template argument"
+            " substituting _Tp is an lvalue reference type");
+      return static_cast<_Tp&&>(__t);
+    }
+
+=========================================
+Application
+=========================================
+
+=========================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

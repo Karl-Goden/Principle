@@ -1,0 +1,73 @@
+
+cmake_minimum_required(VERSION  3.14)
+
+project(project_name)
+
+set(variable_name variable_value)
+
+add_compile_definitions()
+
+add_compile_options()
+
+include_directories(AFTER|BEFORE dirs)
+
+link_directories(AFTER|BEFORE dirs)
+
+link_libraries(libs) linked by all later target
+
+add_library(name STATIC|SHARED|MODULE srcs)
+
+add_executable(name srcs)
+
+target_link_libraries(target libs)
+
+add_subdirectory(CMakelists.txt) & include(xxx.cmake)
+
+find_package()
+
+  Module: cmake builtin find-packages in /usr/share/cmake/Modules/*.cmake, we can reset CMAKE_MODULE_PATH
+
+  Package: System installed package in /usr/lib64/pkgconfig/*pc, we can reset ENV{PKG_CONFIG_PATH}
+
+find_library(path_var NAMES library_names [HINTS dirs] [REQUIRED])
+
+find_program(path_var NAMES program_names [HINTS dirs][REQUIRED])
+
+find_file(path_var NAMES library_names [HINTS dirs] [REQUIRED])
+
+find_path(path_var NAMES library_names [HINTS dirs] [REQUIRED])
+
+configure_file(<input> <output>): cmake @VAR@ or ${VAR} -> makefile variable value
+
+                                  #cmakedefine VAR ... #define VAR ... | /* #undef VAR */
+
+                                  #cmakedefine01 VAR -> #define VAR 0/1
+utility:
+
+  string:
+
+  list: A list in cmake is a ; separated group of strings.
+
+        list is the only structure in cmake, set(var a b c): var=a;b;c
+
+  math: math(EXPR <variable> "<expression>" [OUTPUT_FORMAT DECIMAL|HEXADECIMAL])
+
+        In general, everything in scripting laguage is string, so it must invent some math methods.
+
+        +, -, *, /, %, |, &, ^, ~, <<, >>, and (...)
+
+  file
+
+variable:
+
+  PROJECT_SOURCE_DIR: cmake -S path
+  PROJECT_BINARY_DIR: cmake -B path
+  EXECUTABLE_OUTPUT_PATH
+  LIBRARY_OUTPUT_PATH
+
+  CMAKE_SOURCE_DIR:  root CMakelists.txt path
+  CMAKE_CURRENT_SOURCE_DIR: current CMakelists.txt path
+
+  CMAKE_MODULE_PATH: Semicolon-separated list of directories specifying a search path for CMake modules
+                     to be loaded by the include() or find_package() commands before checking the default modules
+                     that come with CMake. By default it is empty, it is intended to be set by the project.

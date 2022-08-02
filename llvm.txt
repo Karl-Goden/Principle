@@ -1,0 +1,194 @@
+
+In the point of view of metalanguage, every component of a language is an expression.
+every component, even a type, has it's own value. That is the reason why LLVM return a
+Value at every node of AST. In general, Constant create constant values, Builder create
+built-in operations or keyword, +-*/, conversion, function calling, if/while/return etc...
+Function is registered in Module, Block is registered in Function.
+
+Intermediate Representation (IR): 一气化三清
+
+    in-memory compiler IR
+
+    on-disk bitcode representation [bc]
+
+    human readable form, low level language [llas]
+
+utility:
+    bitcode-file:  clang -emit-llvm -c xxx.c
+    lowlevel-file: clang -emit-llvm -S xxx.c
+    llvm-as:   ll -> bc
+    llvm-dis:  bc -> ll
+    llvm-link: link many bcs into one
+    lli:       interpreter of bc
+    llc:       compiler of bc/ll to assembly or object if –filetype=obj
+    opt:       analyzer and optimizer
+
+libs:
+
+    ADT: abstract data type
+
+    Analysis, Passes: analyzing utility
+
+    AsmParser: llas to Module
+
+    BinaryFormat, Object, ObjectYAML: Coff, ELF, Wasm
+
+    Bitcode, Bitstream: bitcode format, reader, writer, analyzer
+
+    IR: intermidiate representation
+
+    IRReader: IR(bitcode or llas) to Module, that means every file is a module.
+
+    LTO: link time optimize
+
+    MC, MCA: machine code & analysis
+
+    Target: various target machine
+
+ADT:
+
+    ilist: intrusive linked list
+
+IR:
+
+    LLVMContext: project-wise
+
+      LLVMContextImpl* pImpl:
+
+        Types, ConstantDatas, Modules
+
+    Modeule: file-wise
+
+        LLVMContext &Context;
+
+    Type:
+
+        LLVMContext &Context; //This refers to the LLVMContext in which this type was uniqued.
+        TypeID      ID;
+        unsigned    SubclassData;
+
+            IntegerType(LLVMContext &C, unsigned NumBits) : Type(C, IntegerTyID), SubclassData = NumBits
+
+            PointerType::get(Type *ElementType, unsigned AddressSpace)
+
+            FunctionType::get(Type *Result, ArrayRef<Type*> Params, bool isVarArg)
+
+    Value: Type *VTy, Use *UseList, char SubclassID: Subclass identifier (for isa/dyn_cast)
+
+           Use: Value *Val, User *Parent, Use *Next, Use **Prev: previous item's Next address
+
+           User: public Value
+                 This class defines the interface that one who uses a Value must implement.
+                 Each instance of the Value class keeps track of what User's have handles to it.
+
+           Constant: public User
+                     A constant is a value that is immutable at runtime.
+                     Functions are constants because their address is immutable. Same with global variables.
+                     Global variables is an address, so it can't be changed, but we can change the pointer value.
+
+           ConstantData: public Constant
+                     These constants have no operands; they represent their data directly, so it can be ConstantFolded
+
+               ConstantInt: APInt Val.
+
+               ConstantFP:  APFloat Val.
+
+               ConstantAggregateZero, ConstantPointerNull, ConstantTokenNone, UndefValue
+
+               ConstantDataSequential: ConstantDataArray ConstantDataVector
+
+           GlobalValue: public Constant(PointerType::get(Ty, AddressSpace), VTy, Ops, NumOps)
+                 value with attributes: LinkageTypes, VisibilityTypes, DLLStorageClassTypes, UnnamedAddr
+
+           GlobalVariable: public GlobalObject, public ilist_node<GlobalVariable>
+
+           GlobalIndirectSymbol: public GlobalValue
+           GlobalAlias: public GlobalIndirectSymbol, public ilist_node<GlobalAlias>
+           GlobalIFunc: public GlobalIndirectSymbol, public ilist_node<GlobalIFunc>
+                        Indirect function uses ELF symbol type extension to mark that
+                        the address of a declaration should be resolved at runtime by calling a resolver function.
+
+           Function: public GlobalObject, public ilist_node<Function>
+                     {
+                       BasicBlockListType BasicBlocks;
+                       size_t NumArgs; rgument *Arguments;
+                       ValueSymbolTable *SymTab;
+                       AttributeList AttributeSets;
+                     }
+
+                     Create(FunctionType *Ty, LinkageTypes Linkage, const Twine &N, Module &M)
+
+           Instruction: public User, public ilist_node_with_parent<Instruction, BasicBlock>
+
+           BasicBlock: public Value, public ilist_node_with_parent<BasicBlock, Function>:
+                       {InstListType InstList; Function *Parent;}
+                       A basic block is simply a container of instructions that execute sequentially.
+                       Basic blocks are Values because they are referenced by instructions such as branches and switch tables.
+                       The type of a BasicBlock is "Type::LabelTy" because the basic block represents a label to which a branch can jump.
+
+                       Create(LLVMContext &Context, const Twine &Name = "", Function *Parent = nullptr, BasicBlock *InsertBefore = nullptr)
+
+               void SetInsertPoint(BasicBlock *TheBB): This specifies that created instructions should be appended to the end of the specified block.
+               void SetInsertPoint(Instruction *I): This specifies that created instructions should be inserted before the specified instruction.
+               void SetInsertPoint(BasicBlock *TheBB, BasicBlock::iterator IP): This specifies that created instructions should be inserted at the specified point.
+
+                    Above 3 functions change the {BasicBlock *BB, BasicBlock::iterator InsertPt} of IRBuilder.
+
+
+ExcuteEnfine:
+
+  JIT:
+
+    InitializeNativeTarget
+
+    InitializeNativeTargetAsmPrinter: CodeGen
+
+    InitializeNativeTargetAsmParser:  MCParser
+
+    InitializeNativeTargetDisassembler: MCDisassembler
+
+    MCJIT: machine code  & OrcJIT: On request compile
+
+
+global variable: @
+local  variable: %
+       寄存器变量： 直接计算或加载
+       栈变量：     首先需要分配空间
+
+
+int k = 1;
+int add(int a)
+{
+    return k + a;
+}
+int main()
+{
+    return add(1);
+}
+
+clang -emit-llvm -S add.c
+
+@k = dso_local global i32 1, align 4
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local i32 @add(i32 %a) #0 {
+entry:
+  %a.addr = alloca i32, align 4
+  store i32 %a, i32* %a.addr, align 4
+  %0 = load i32, i32* @k, align 4
+  %1 = load i32, i32* %a.addr, align 4
+  %add = add nsw i32 %0, %1
+  ret i32 %add
+}
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local i32 @main() #0 {
+entry:
+  %retval = alloca i32, align 4
+  store i32 0, i32* %retval, align 4
+  %call = call i32 @add(i32 1)
+  ret i32 %call
+}
+
+
+Support:
