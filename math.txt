@@ -1,5 +1,8 @@
 	Math
 
+The measurement of the power of mathematic is based on ite capability to
+solve unknown problems.
+
 The core of mathematic is to combine the abstract model with the material
 and by linking the most of abstract models to uncover the reality of world.
 A common error-prone point-of-view is the abstract model is unalignmented,

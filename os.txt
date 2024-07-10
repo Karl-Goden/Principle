@@ -1,0 +1,76 @@
+	An analysis of operating system based on xv6-riscv
+
+0: Interrupt & Exception & Trap:
+
+	Interrupt is asynchronous, Exception is synchronous. Trap can either interrupt or exception.
+	
+	Hardware interrupt is external device signal (timer, uart, disk, etc).
+	Software interrupt is usually used to custom hardware interrupt handler.
+	For example, a hardware timer handler can update date the system time in machine mode, and then
+	transform that interrupt by creating a software interrupt by which to awake the sleeping process.
+
+1: Start in entry.S
+	
+	+---------------------+
+	|        ...          |
+	+---------------------+ entry KERNBASE
+	|       OS Code       |
+	+---------------------+ etext
+	| rodata, data, bss   |
+	+---------------------+
+	|        Stack        | auto adapted i guess
+	+---------------------+ end
+	|        Heap         | used by kalloc divided as a freelist
+	+---------------------+ PHYSTOP
+	
+	mode: machine > supervisor > user
+		  mtvec/stvec/utvec: handler
+		  mip/sip/uip: pending
+		  mie/sie/uie: enable
+		  mret/sret: return
+		  mepc/sepc: return address
+		  mcause/scause
+	
+	User interrupt is syscall, supervisor interrupt is device interrupt,
+	machine interrupt is timer. Although timer is also a device, it is
+	the most important device since it is the only mechanism to interrupt
+	a malfunction. Even divide-by-zero is interrupt caused by cpu, it is
+	also only a supervisor interrupt.
+	
+	At first in entry.S, it first read mhartid, and based that id alloc a 4K
+	stack for every hart and set stack pointer sp to it.
+	Then it call start in which it set main function as epc to be called after
+	mret. and then it init the timer to set the timerver as the only mtvec.
+	
+	1) Read mhartid
+	2) Alloc 4K stack for every hart and set the stack pointer sp.
+	3) call start to init machine mode
+	4) call main to init
+	5) call scheduler
+	
+1: Context Switch in swtch.S
+
+	Store current context which contains ra, sp and callee-saved s0 - s11.
+	and load to-run process's constext to its pertaining registers.
+
+2: SpinLock & SleepLock
+
+	struct spinlock {
+		int locked;
+		struct cpu *cpu;
+	}
+
+	method: init, acquire, release, holding
+
+3: System Call
+
+	Befor call "ECALL", user put syscall's arguments on a0 - a6. a7 is implicitly
+	call number which is defined in syscall.h.
+	
+	ECALL will induce exception.
+	
+4: Interrupt Handler
+
+	csrw mtvec, timervec  // defined in kernelvec.S, called in start::timerinit
+	csrw stvec, kernelvec // defined in kernelvec.S, called in trap::usertrap
+

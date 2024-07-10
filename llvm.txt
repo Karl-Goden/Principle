@@ -10,11 +10,12 @@ Section 1: Architecture
 
 	Module is the parent of Function, Function is the parent of BasicBlock,
 	BasicBlock is the parent of Instruction. Instruction use Operand so it 
-	is a user, Operand is an Instruction or Constant. All the above class is 
-	Value, but only Instruction and below is a user, and we can use uselist to traverse the SSA.
+	is a user, Operand is an Instruction or Constant. All the above class is
+	Value, but only Instruction and below is a user, and we can use uselist
+	to traverse the SSA.
 	Note Operator can simultaneouly express Instruction and ConstantExpr in use-chain.
 	There are 4 User classes: Operator, Instruction, Constant and DerivedUser.
-	There are 7 Constant classes: mainly ConstantData, ConstantExpr, GlobalValue
+	There are 7 Constant classes: mainly ConstantData, ConstantExpr, GlobalValue,
 	ConstantAggregate and BlockAddress.
 		a) ConstantExpr can use other Constant, but ConstantData is a single data item
 		   like (ConstantInt, ConstantFP, UndefValue).
@@ -107,6 +108,8 @@ Section 3: Instruction
 			case typeid(t2): ;
 			default: resume {ptr, i32} %ret;
 			}
+			
+		bool Instruction::isEHPad() { return Opc == {CatchSwitch, CatchPad, CleanupPad, LandingPad} }
 
 Section 4: Intrinsic
 
@@ -149,18 +152,134 @@ Chapter 3: Pass
 
 Section 1: PassManager
 
-	LagacyPassManager VS PassManager : option -enable-new-pm. Legacy is still
-	used in backend. The functionality of manager: Register, Construct, Pipeline.
+	There are two kinds of passes: transform and analysis, both of which may depend on
+	other analysis. So we should create a mechanism to fulfill the following function:
+
+		0: How to represent pass ?
+		1: How to register pass so that commandline can find it ?
+		2: How to build and run pass manager ?
+		3: How to get analysis info in transform or analysis pass ?
+		4: How to indicate a pass depends on other analysis and reserve info ?
+		5: How to orgnize pass manager ?
+		6: How to sort the running order of pass ?
+
 	Legacy:
-		Pass.h: define class Pass, FunctionPass, ModulePass.
-		PassInfo.h: excludingly describe a Pass, including its constructor.
-		PassSupport.h: macros defined Pass initialize function to register pass using PassInfo.
-		PassAnalysisSupport.h: define AnalysisUsage.
-		PassRegistry.h: keep PassInfo.
-		InitializePasses.h: declare Pass initialize functions which is called by opt.
-		IR/LagacyPassManager.h: define PassManager and FunctionPassManager.
-		Transform/IPO/PassManagerBuilder.h: choose Passes based on OptLevel.
-	New:
+
+		0:  <Pass.h>
+			There are 5 kinds of Pass: Region, Loop, Function, CallGraphSCC, Module.
+			For every kind of pass there is a associated PassManager. Apart from that,
+			there is a special PassManager pass, since some PassManager is also
+			implemented as a pass.
+			class Pass {
+				PassKind Kind; // indicate which is the kind of current pass.
+				const void *PassID; // Every subclass has an ID
+				AnalysisResolver *Resolver; // For dependent analysis resolving
+			}
+			
+			ModulePass, FunctionPass subclass Pass has a abstract runOnModule.. functions.
+		
+		1:  <PassInfo.h>, <PassSupport.h>, <PassRegistry.h>
+		
+			The macro defined INITIALIZE_PASS in PassSupport.h create a PassInfo which has
+			pass(name, ID, constructor). This PassInfo is registered to PassRegistry.
+		
+		2:  <clang/lib/CodeGen/BackendUtil.cpp::EmitAssemblyWithLegacyPassManager>
+			{
+				legacy::PassManager CodeGenPasses;
+				legacy::PassManager PerModulePasses;
+				legacy::FunctionPassManager PerFunctionPasses;
+				// Add passes for those managers
+				CreatePasses(PerModulePasses, PerFunctionPasses) -> PMBuilder.populate
+				for (Function &F : M)
+					PerFunctionPasses.run(F);
+				PerModulePasses.run(M);
+				CodeGenPasses.run(M);
+			}
+			
+			<llvm/tools/opt/opt.cpp>
+			{
+				
+			}
+			
+		3:  <PassAnalysisSupport.h>
+		
+			Pass::getAnalysis<AnalysisClassName> can get its dependent analysis object.
+			AnalysisInfo is located in this object.
+			There are 4 types of dependency relationship:
+				Module -> Module,
+				Module -> Function,
+				Function -> Module,
+				Function -> Function,
+				
+			Before current pass, pass manager has
+			check its dependent passed and run it, so the analysis info is valid. Note that
+			this is ahead of time (AOT).
+		
+		4: <PassAnalysisSupport.h>
+		
+			class AnalysisUsage {
+				SmallVector<AnalysisID> Required; // required on run time
+				SmallVector<AnalysisID> Preserved;
+				SmallVector<AnalysisID> RequiredTransitive; // required on lifetime
+				SmallVector<AnalysisID> Used;
+				bool PreserveAll;
+			};
+			
+			Pass::getAnalysisUsege(AnalysisUsage&) can set above object.
+		
+		5: <IR/LegacyPassManager.h>, <IR/LegacyPassManagers.h>
+			
+			class PassManager {                 class FunctionPassManager {
+				void add(Pass *P);					void add(Pass *P);
+				bool run(Module &M);				bool run(Function &F);
+				PassManagerImpl *PM;				FunctionPassManagerImpl *FPM;
+			};									};
+			
+			
+			class PassManagerImpl : public Pass, public PMDataManager, public PMTopLevelManager {
+				PassManagerImpl() : Pass(PT_PassManager, ID), PMTopLevelManager(new MPPassManager()) {}
+			}
+			class FunctionPassManagerImpl : public Pass, public PMDataManager, public PMTopLevelManager {
+				PassManagerImpl() : Pass(PT_PassManager, ID), PMTopLevelManager(new FPPassManager()) {}
+			}
+			
+			class MPPassManager : public Pass, public PMDataManager {
+				MPPassManager() : Pass(PT_PassManager, ID) {}
+				MapVector<Pass*, FunctionPassManagerImpl*> OnTheFlyManagers;
+			}
+			class FPPassManager : public ModulePass, public PMDataManager {
+				FPPassManager() : ModulePass(ID) {}
+			}
+			
+			class PMDataManager {
+				PMTopLevelManager *TPM;
+				SmallVector<Pass*> PassVector;
+			}
+			
+			class PMStack {
+				std::vector<PMDataManager*> S; 
+			}
+			
+			class PMTopLevelManager {
+				PMTopLevelManager(PMDataManager *PMDM) {
+					PMDM->setTopLevelManager(this);
+					addPassManager(PMDM);
+					activeStack.push(PMDM);
+				}
+				
+				PMStack activeStack;
+			}
+			
+			Real pass manager is PMDataManager, so the FPPassManager and MPPassManager subclass PMDataManager
+			to group function pass and module pass.
+			
+			When we add a pass to PassManager or FunctionPassManager, they invoke impl's add method
+			which ultimately call PMTopLevelManager::schedulePass.
+
+
+
+	New: option -enable-new-pm
+	
 		IR/PassManager.h: define PassManager, AnalysisManager and PassInfoMixin.
 		lib/Passes/PassRegistry.def: register Pass 
 		Passes/PassBuilder.h: register AnalysisManager and choose Passed based on OptimizationLevel.
@@ -209,9 +328,9 @@ Section 1: PassManager
 			// We need not to care about ID's value. So new Pass's type is: struct alignas(8) {};
 		}
 
-	Q7: How to use PassInstrumentation ?
-	A7: Refer to RepeatedPass in IR/PassManager.h
-	
+	Q8: How to use PassInstrumentation ?
+	A8: Refer to RepeatedPass in IR/PassManager.h
+
 Chapter 4: CodeGen
 
 Section 0: Pass Pipeline
@@ -232,11 +351,22 @@ Section 0: Pass Pipeline
 	CodeGenPasses.add(createFreeMachineFunctionPass());
 	CodeGenPasses.run(Module);
 
+	MachineModelInfo::getOrCreateMachineFunction transform Function to MachineFunction which is called
+	by MachineFunctionPassManager::run.
+
 Sector 1: Instruction Selection
 
 	TargetPassConfig::addCoreISelPasses(): SelectionDAG, FastISel, GlobalISel.
 	
-	SelectionDAGISel::runOnMachineFunction::SelectAllBasicBlocks::SelectBasicBlock {
+	SelectionDAGISel::runOnMachineFunction {
+		SelectAllBasicBlocks();
+	}
+	
+	SelectionDAGISel::SelectAllBasicBlocks {
+		SelectBasicBlock();
+	}
+	
+	SelectionDAGISel::SelectBasicBlock {
 		SelectionDAG *CurDAG;
 		SelectionDAGBuilder *SDB;
 		for (Instruction I : BB)
@@ -307,11 +437,11 @@ Sector 1: Instruction Selection
 		TypeSoftPromoteHalf: soften half to i16 and use float to do arithmetic.
 		TypeScalarizeVecor: replace this one-element vector with its element.
 		TypeSplitVector: split this vector with two of half size.
-		TypeWidenVector: widen into a larger vector (more element num).
+		TypeWidenVector: widen into a larger vector (more element width or num).
 		TypeScalarizeScalableVecor: scalarize vector as we hope.
 
-	VectorLegalizer: LegalizeTypeAction TLI.getOperationAction(V.getOpcode())
-	SelectionDAGLegalize: Ditto
+	VectorLegalizer: LegalizeAction TLI.getOperationAction(V.getOpcode())
+	SelectionDAGLegalize: LegalizeAction TLI.getOperationAction(V.getOpcode())
 		Legal:
 		Promote: execute in a larger type.
 		Expand: expand this to other ops, otherwise use libcall
@@ -555,11 +685,50 @@ Section 5: Target & MC
 		need a nop to skip the hazard.
 	
 	
-Section 6: How to lower a function ?
+Section 6: Register & Memory Allocation
 
-	SelectionDAGISel: select MachineInst
-	|
-	|
+	MachineFrameInfo: This is a key structure in the process of creating and optmizing
+	and lowering of MachineFunction since it represents the spatial facet of the pragram
+	against the temporal facet, aka text. When we are creating the text, we must imagine
+	what current function's frame is like.
+	
+	MachineMemOperand is a general interfae for referencing address to merge all kinds of
+	addressing mode (direct, operand indirect, placement, inc, dec). Only target specific
+	TargetInstrInfo can operate it.
+	
+	FunctionLoweringInfo creat StackObject on AllocaInst by MachineFrameInfo::CreateStackObject
+	(for static AllocaInst) or CreateVariableSizedObjecr (for dynamic AllocaInst). This info
+	is only lived in instruction selection stage ISel. That is to say, this 'lowering' means
+	only to lower IR to MachineInstr, not including register allocation.
+	
+	MachineFrameInfo::CreateStackObject is also called by SelectionDAG::CreateStackTemporary
+	to generate a FrameIndex type of SDValue in instruction selection.
+
+	Based on these structrue's info, we can do some analysis in following:
+	
+		SlotIndexes: for every MachineInstr assign an index.
+					
+
+
+	Based on these structrue's info, we can do some optimizations in following:
+	
+		StackColoring: merge the not-overlapping stack slot based on allocated memory
+		markers (llvm.lifetime.start|end).
+	
+		StackSlotColoring: more fine-grained than then previous pass
+
+		LiveStacks: liveness of stack slots
+		
+	MachineRegisterInfo: Apart from memory info which is represented by above MachineFrameInfo,
+	this structure represent the register info in a function.
+
+	LiveVariables: get every operand's killed instruction
+	
+	LiveIntervals: liveness of registers
+	
+	VirtRegMap: an accompaning class in register allocating
+	
+	LiveRegMatrix:
 	
 	
 Section 7: td
@@ -670,9 +839,10 @@ Section 1: clang
 Section 2: llvm
 
 	-enable-new-pm|bugpoint-enable-legacy-pm: choose by opt.
-	-debug-pass=Arguments|Structure|Executions|Disabled.
 	-debug: output LLVM_DEBUG info.
-	-print-after-all: print ir after every pass.
+	-debug-pass=Arguments|Structure|Executions|Disabled.
+	-print-after-all: print ir/mir after every pass.
+	-print-after-isel: print mir after isel.
 
 Chapter 9: Language
 
@@ -692,10 +862,24 @@ Section 5: Scoping and Binding
 	it's called static scoping or lexical scoping. And if it is resolved as local variable
 	i in function bar, it's called dynamic scoping (at dynamic runtime).
 
+
+Section 6: Memory Model
+
+	
+
+Chapter 10：Hard to Remember
+
+Item 1: eayly clobber
+
+	By default, the compiler assumes all inputs will be consumed before any output
+	registers are written to, so that it's allowed to use the same register for both.
+	But if the assumption is wrong, thing will fail. The 'early clobber &' marker can
+	the the compiler.
+
 References:
 
 	Programming Language Pragmatics --Michael Scott.
 
 	Automatic Parallelization --Samuel MidKiff
 	This books is one of Systhesis Lectures on Computer Architecture and the only book
-	i've encountered which concentrate on auto parallelization in compiler optimization.
+	i've encountered which concentrates on auto parallelization in compiler optimization.
