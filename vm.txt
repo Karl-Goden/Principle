@@ -1,0 +1,87 @@
+1)  python/_ffi is the interface between c and python. There are two kinds
+    of descriptions of c's data and function type: ctype and cython. The
+    environment (lib, include) is set by setup.py while installing.
+
+    Every module has a _ffi_api.py file which calls tvm._ffi._init_api(prefix,
+    __name__) to find all register functions with the same prefix and add those
+    functions at _ffi_api module so that python can call c functions.
+
+2)  tvm/runtime manage runtime interaction between python and c. registry.h has
+    a TVM_REGISTER_GLOBAL macro to register global function that has a non-c-format
+    name, e.g., "tir._transform.SimplifyExpr". The Registry has 3 kinds of method
+    register function:
+        set_body: PackedFunc receive non-typed arguments TVMArgs, TVMRetValue.
+        set_body_typed: TypedPackedFunc receive typed argument.
+        set_body_method: TypedPackedFunc receive object method.
+
+    Object is a generic interface for python and c. Every object has a handle which
+    contains a ObjectPtr<Object> which contains a Object.
+    Python and C use this handle to control data structure. In python handle is
+    inited by __init_handle_by_constructor__(_ffi_api.construcor) in _ctypes/object.py
+
+
+3)  Flow: model ----> relay ----> te ----> tir ----> hardware
+    Relay is high-level (graph level) ir. Relax (relay next) has more capability.
+    Te is medium-level (tesor expression) ir in topi (tensor operator inventory).
+    Tir is low-level (target) ir which will to be lowered to mlir, llvm, or cuda.
+    Ir is a common structure for all above class.
+
+4)  driver/tvmc (load,tune,compile,run) a model into IRModule. Multiple frontends are
+    supported. At beginning all kinds of models can be translated into relay. Relax is
+    a new generation of relay. Function relay_to_relax can transform relax back to relay.
+
+5)  A flow of opcode: asinh
+
+        relax/transform/legalize_ops/uniry.py: relax.asinh -> topi.asinh
+        topi/math.py: asinh(x) -> te.compute(x.shape, lambda *i: te.asinh(x(*i)))
+        te/__init__.py: from tvm.tir import asinh
+        tir/op.py: asinh(x) -> call_intrin(x.type, "tir.asinh", x)
+        tir/op/op.cc: TVM_TIR_REGISTER_PURE_UNARY_OP("asinh")
+                        -> TVM_TIR_REGISTER_OP("asinh")
+                            -> TVM_REGISTER_OP("tir.asinh")
+        target/intrin_rule.cc: TVM_REGISTER_OP("tir/asinh").set_attr<FLowerIntrinsic>(
+                                "default.FLowerIntrinsic", DispatchPureExtern<FloatSuffix>)
+        target/intrin_rule.cc: DispatchPureExtern: Call(builtin::call_pure_extern, "fasinh")
+        target/llvm/codegen_llvm.c: CodeGenLLVM::VisitExpr_(CallNode *op) {
+            if (op == builtin_call_extern || op == builtin_call_pure_extern)
+                llvm::Module.getOrCreateFunction();
+            else if (op == builtin_call_llvm_intrin_ || op == builtin_call_llvm_pure_intrin_)
+                create llvm::Instruction
+        }
+
+        1:  te.compute(x.shape, lanbda *i: te.asinh(x(*i)))
+            IterVar *i in lambda is index list from which x(*i) can get elements. Length of i
+            is equal to rand of x. Those itervar can be scheduled in loop by te.schedule.
+
+6） Bulid flow:
+        driver/driver_api.cc: runtime::Module TIRToRuntime(Map<Target, IRModule> targets, Target host) {
+            for items in targets：
+                module = codegen::build(item);
+            host_module.import(device_module);
+            return host_module;
+        }
+
+        target/codegen.cc: runtime::Module codegen::Build(IRModule, Target) {
+            return "target.build.<target>"(IRModule, target);
+        }
+
+        target/codegen.cc: TVM_REGISTER_GLOBAL("target.build").set_body(Build)
+
+7)  Schedule:
+
+        TE Schedule and Stage: in Schedule constructor, every operation is bestowed with a Stage.
+
+8)  Names:
+
+        tir.decl_buffer is used to create a tir.Buffer, only tir has memory buffer
+        since tir is the most closed to hardware. usmp (unified static memory planner)
+        is also targeted at memory allocation.
+
+        tir.function has PrimFunc, TensorIntrin and IndexMap. PrimFunc is tir's function
+        which is always translated to a target function. TensorIntrin register target
+        intrinsic declaration and implementation.
+
+        te.create_prim_func(list<te.tensor.Tensor>) can link a list of tensor expressions
+        to create a tir.PrimFunc.
+
+        ir.BaseExpr is subclassed by ir.PrimExpr and ir.RelayExpr which is also used by relax.

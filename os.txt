@@ -1,13 +1,8 @@
 	An analysis of operating system based on xv6-riscv
 
-0: Interrupt & Exception & Trap:
+0: Interrupt & Exception:
 
-	Interrupt is asynchronous, Exception is synchronous. Trap can either interrupt or exception.
-	
-	Hardware interrupt is external device signal (timer, uart, disk, etc).
-	Software interrupt is usually used to custom hardware interrupt handler.
-	For example, a hardware timer handler can update date the system time in machine mode, and then
-	transform that interrupt by creating a software interrupt by which to awake the sleeping process.
+	Interrupt is asynchronous, Exception is synchronous.
 
 1: Start in entry.S
 	
@@ -17,8 +12,6 @@
 	|       OS Code       |
 	+---------------------+ etext
 	| rodata, data, bss   |
-	+---------------------+
-	|        Stack        | auto adapted i guess
 	+---------------------+ end
 	|        Heap         | used by kalloc divided as a freelist
 	+---------------------+ PHYSTOP
@@ -29,7 +22,7 @@
 		  mie/sie/uie: enable
 		  mret/sret: return
 		  mepc/sepc: return address
-		  mcause/scause
+		  mcause/scause: cause
 	
 	User interrupt is syscall, supervisor interrupt is device interrupt,
 	machine interrupt is timer. Although timer is also a device, it is
@@ -57,7 +50,6 @@
 
 	struct spinlock {
 		int locked;
-		struct cpu *cpu;
 	}
 
 	method: init, acquire, release, holding
@@ -74,3 +66,9 @@
 	csrw mtvec, timervec  // defined in kernelvec.S, called in start::timerinit
 	csrw stvec, kernelvec // defined in kernelvec.S, called in trap::usertrap
 
+
+
+
+
+proc.c:190: mappages(TRAMPOLINE, trampoline)
+proc.c:190: mappages(TRAPFRAME, p->trapframe)

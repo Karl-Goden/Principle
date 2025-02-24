@@ -1,10 +1,4 @@
-This document will explain why Guido is so stupid. The reason
-is i don't undersatand a python module which is written by my
-cross-peacific colleague (including venv, pyinstaller, cffi,
-decorator, let alone a series of tricky classes all of which i
-have never heared before), since i must extend this module,
-i decide to deep into python thoroughly to see why python is 
-designed so disguisting (at least for me at present).
+This document will explain why python is so disguisting.
 
 1) Module and Packege: module is a .py file, package is a directory
    containing an __init__.py file which declares which module's

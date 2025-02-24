@@ -51,6 +51,9 @@ Q0: If there is any power leakage in the following example:
 	If A is not used, the latter value is always 0, so its inst user is static ?
 	but the mux and assign's hardware source are different.
 
+
+Western Digital SweRV source analysis:
+
 References:
 	1. Digital Logic and Microprocessor Design with Interfacing --Enoch O. Hwang
 	   A descriptive introductory book which is user friendly. He explain why
