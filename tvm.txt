@@ -1,3 +1,6 @@
+0)  A Top-Down Overview
+
+
 1)  python/_ffi is the interface between c and python. There are two kinds
     of descriptions of c's data and function type: ctype and cython. The
     environment (lib, include) is set by setup.py while installing.
@@ -18,7 +21,6 @@
     contains a ObjectPtr<Object> which contains a Object.
     Python and C use this handle to control data structure. In python handle is
     inited by __init_handle_by_constructor__(_ffi_api.construcor) in _ctypes/object.py
-
 
 3)  Flow: model ----> relay ----> te ----> tir ----> hardware
     Relay is high-level (graph level) ir. Relax (relay next) has more capability.
@@ -51,7 +53,7 @@
 
         1:  te.compute(x.shape, lanbda *i: te.asinh(x(*i)))
             IterVar *i in lambda is index list from which x(*i) can get elements. Length of i
-            is equal to rand of x. Those itervar can be scheduled in loop by te.schedule.
+            is equal to rank of x. Those itervar can be scheduled in loop by te.schedule.
 
 6） Bulid flow:
         driver/driver_api.cc: runtime::Module TIRToRuntime(Map<Target, IRModule> targets, Target host) {
