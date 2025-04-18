@@ -87,3 +87,177 @@
         to create a tir.PrimFunc.
 
         ir.BaseExpr is subclassed by ir.PrimExpr and ir.RelayExpr which is also used by relax.
+
+Another Doc:
+
+noun:
+    PrimFunc: the only funtion at runtime. It can be a kernel function,
+    a host function,a device function,or the main function.
+    LetBinding:in functional symbolic expressional paradigm programming
+    there is no memory reference.
+ir::Type:
+    PrimType: contains a runtime::DataType which is a wrapper of dlpack::DLDataType
+    which contains {code, bits,lanes} to express scalar and vector of
+    base type like integer or float.Lib dlpack conforms standard
+    specification to pass data between various framework and targets.
+    PointerType: contains a Type and a storage_scope.
+    TupleType: contains an Array<Type>
+    TypeVar:A dynamic type whose value (i.e. real type) is only fixed at runtime.
+    GlobalTypeVar:TypeVar used globally.
+    TypeConstraint:A one of a kind type?
+    FuncType: contains argument types and return type. If function is a template
+    it uses TypeVar as argument types and an array of TypeConstraint to
+    every template argument.
+    IncompleType: only contains a TypeKind.
+    RelayReferType: contains a type.
+    BaseTensorType:nothing
+    TensorType: contains an Array<PrimExpr> shape which express dimension of
+    tensor and a DataType dtype for element type.
+    relax::DynTensorType: contains an int ndim to indicate the rank of tensor
+    and a DataType dtype for element type.Only hasha
+    rand but not dimensions since it is dynamic.
+    relax::ShapeType: contains only an int ndim without a dtype since it is just a shape.
+    relax::ObjectType:nothing
+    relax::PacketFuncType:nothing
+ir::BaseExpr: PrimExpr and RelayExpr subclass it.
+    PrimExpr only contains a DataType dtype to express a PoD data.
+    1:express a scalar or vector of integer or float
+    i) all tir data is PrimExpr,it has no tensor since in hardware's
+    point of view tensor is a one array of data in memory.
+    ii) all tir expression is PrimExpr.
+    ii) te::tensor shape is Array<PrimExpr>.
+    2:express an action on PrimExpr
+    RelayExpr accomodate more complex, abstract and structured data type. It
+    is a general expression in tvm. In theory everything is a expression.
+    1:express a tensor.
+    i)all relay and relax data is RelayExpr.
+    ii) all relay and relax expression is RelayExpr.
+    2:express a function BaseFunc.
+    i) relay's Function,relax's Function and ExternFunc,tir's PrimFunc.
+    3:express an operation Op
+    relay, relax and tir use TVM_REGISTER_oP to register an operation.
+    An operation contains pattern match optimization and lower information.
+    te has no Expr, but an Operation mechanism like other's Expr.
+    Difference between Operation and Expr:Expr is basic meta opcode.
+    Operation is complix extension.
+bottom-up flow:
+    0)tir->target
+    runtime::Module driver::build(Map<Target,IRModule> input,Target host)
+    target.build.<c,llvm,opencl,stackvm...> can lower PrimFunc in IRModule
+    to runtime::Module. Every target build its own IRModule and then save it.
+    i) Basic Expr: Add,Sub, Mul, Div,Mod,Min,Max,And,Or,Not
+    EQ,NE,LT,LE,GT,GE，Select
+    IntImm,FloatImm,StringImm
+    Broadcast, Shuffle, Ramp
+    Reduce,Cast,Any
+    ii) Call Expr: all operation is call by this. There are 3 kinds:
+    general:pure arithematicoperatorwithout side-effect
+    sin, cos. These function is always implemented in math library.
+    The src/target/intrin_rule.cc and intrin_rule_<target>.cc will
+    indicate how to lower them.
+    b) buildin:concerned about grammar
+    1) call_extern call_pure_extern
+    2) call llvm_intrin call llvm_pure_intrin
+    3) tvm_call_packed tvm_call_cpacked
+    tvm_call_packed_lowered tvm_call_cpacked_lowered
+    tvm_call_trace_packed
+    c)runtime:
+1）te->tir
+    IRModule driver::ScheduleToModule(Schedule sch, Array<Object> args,
+    Map<te::Tensor,tir::Buffer> binds)
+    te has no expr,but only 6 operations:
+    Placeholder: Argument for input and output
+    Compute, TensorCompute: te.compute can call lambda to create computation
+    tree based on which we can schedule it. We can
+    also create hardware specific tensor intrinsic
+    operator by te::decl_tensor_intrin to tensorize
+    some operator.
+    Extern: silimar to te.compute, but call a function.
+    Scan: te.scan(init, update, output) first init ouput.shap[o] and then
+    iterately update output.
+    Hybrid:hybrid halide into te.
+2)relax|relay->te
+    i) ir::register_op_attr（op_name, attr _key,value, level) to lower operation
+    relay register FTVMCompute, FTVMStrategy.
+    relax register FLegalize, has no schedule strategy,but delayed to tir's
+    meta_schedule.
+    ii) partition_for_<lib> to lower library: cudss, cublas, cutlass...in
+    relay/op/contrib
+    relax/backend/contrib
+    3) relax.frontend.mm.Module|script|relax.BlockBuilder -> relax
+    a) BlockBuilder is relax's intrinsic builder.
+    b) Script is a domain specific language to write IRModule.
+    ir as I, relax as R, tir as T. All of them has two subdir: frame,ir.
+    frame to control code stack scope.ir to build code.
+    i) base:
+    frame: IRBuilderFrame
+    build: IRBuilder
+    ii)ir:
+    frame: IRModuleFrame
+    build: IRModule,DeclFunction,DefFunction
+    iii) relax:RelaxFrame -> SeqExprFrame -> FunctionFrame,ThenFrame,ElseFrame
+    -> BlockFrame,IfFrame
+    iv) tir:TIRFrame -> PrimFuncFrame,<Stmt>Frame
+    c) Relax.frontend.nn.Module as base class to create a computation graph and
+    then call export_tvm to export relax ir.
+relax:
+    Function: Array<Var> params; SeqExpr body;
+    SeqExpr: Array<BindingBlock> blocks; Expr body;
+    BindingBlock: Array<Binding> bindings;
+    DataflowBlock: public BindingBlock
+    Binding:Varbinding(Var var,Expr value)
+    Matchcast(Var var,Expr value,StructInfo struct_info)
+    StructInfo:Object,Prim,Shape,Tensor,Tuple,Func
+    Leaf:ShapeExpr,Var,DataflowVar,Constant,PrimValue,StringImm,DataTypeImm
+    Expr:Call,Op,Tuple,TupleGetItem,Leaf,Seq,If
+    Function is composed by a block list: BindingBlock （impure) and DataflowBlock (pure).
+    From relax/block_builder.py's FunctionScope and DataflowScope we can find BindingBlock
+    is created in default once dataflow block is not being used.So block scope has no
+    hierarchy level,it is just a flatten list. Unlike tir, relax function pass by value
+    but not buffer, so return it. Dataflow and Function is a closure, so we must export
+    it's output by emit output and emit func output.
+    Backend use dataflow pattern to match library calling, e.g., cudnn,cublas, cutlass.
+    Every library use register_patterns to register its supported call (in cublas) or
+    operation (in nnapi). partition_for_<lib> will call FuseopsByPattern to match the
+    registered patterns. Backend_tir can also use call_tir pattern to match library.
+relay:
+    Function:Array<Var> params;Expr body;
+    Expr: Constant, Tuple,Var, Let, Call, Op,If, TupleGetItem, Temp
+    RefCreate,RefRead,RefWrite
+    Op contrib libs register patterns, and partition_for_<lib> use MergeComposite to match.
+    Op strtegy arch register operator schedule method.
+tir:
+    usmp:unified static memory planner.
+schedule:
+    te:1) sch = create_schedule(Array<Operations> ops) will create a topological ordered
+    operation list.And then create a stage to express these computing operations.
+    Operator level schedule can action on these computing operation:
+    a) reorder: change loop order
+    b) fuse: merge multi loop into one
+    c） split: split one loop into multi
+    d) tile:split and reorder
+    //Set attribute iter_type
+    e）unroll:
+    f）
+    parallel:
+    g）pragma:
+    h) vectorize:
+    i) tensorize: alse set tensor_intrin
+    2) relay register a strategy for every operation at attribute FTvMstrategy.
+    Every operation has a generic default strategy. We create hardware specific
+    strategy by: relay.op.Opstrategy.add_implementation(compute,schedule,name)
+    and override the default.
+    tir: 1) Unlike te's division of stage and schedule,tir's schedule directly act on
+    block or loop.
+    2) relax use MetaScheduleApplyDatabase,MetaScheduleTuneIRMod,MetaScheduleTuneTIR
+    to tune different level expressions. Hardware specific operator is described in
+    tir.tensor_intrin.py and registered in meta_schedule/schedule_rule/schedule_rule.cc
+        a)autotvm:templated-based on te
+    b)auto_scheduler:(a.k.a,Ansor) template-free on te
+    c) meta_scheduler:unified the above two approaches on te and tir
+msc: multi-system compiler is an interface between tvm and other kinds of inference
+    frameworks (tensorflow, pytorch, tensorrt) ai compiler so that tvm can use
+    other compiler's specific algorithm. The dataflow dag MscGrpah is used as IR.
+Reference:
+    Bring your own codegen to deep learning compiler.
+

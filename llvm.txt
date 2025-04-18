@@ -276,8 +276,6 @@ Section 1: PassManager
 			When we add a pass to PassManager or FunctionPassManager, they invoke impl's add method
 			which ultimately call PMTopLevelManager::schedulePass.
 
-
-
 	New: option -enable-new-pm, since llvm-17 in default
 	
 		IR/PassManager.h: define PassManager, AnalysisManager and PassInfoMixin.
@@ -485,17 +483,23 @@ Section 2: Schedule
 	ScheduleDAGTopologicalSort: detect whether two instructions has relationship.
 	SchedulePriorityQueue: who should be first if two instructions are independent.
 	ScheduleHazardRecognizer: dectect if there is hazard on instruction flow.
+	ScheduleDAGMutation: post-process dag after schedule.
 	In summary, TopologicalSort is qualitative, PriorityQueue is quantitative. Both of
 	them is on instruction-grained, but HazardRecognizer is on pipeline.
 
-	We now concentrate on ScheduleDAGSDNodes:
-	(a) ScheduleDAGLinearize is a most trivial scheduler, it simply linearize DAG in
-		topological order and only considering Glue constraint.
-	(b) ScheduleDAGFast
+	ScheduleDAGNodes schedule DAG. ScheduleDAGInstrs schedule MachineInstr.
+
+	1）ScheduleDAGSDNodes is defined in lib/CodeGen/SelectionDAG:
+		(a) ScheduleDAGLinearize is a most trivial scheduler, it simply linearize DAG in
+			topological order and only considering Glue constraint.
+
+		(b) ScheduleDAGFast
 	
-	(c) ScheduleDAGRRList
+		(c) ScheduleDAGRRList
 	
-	(d) ScheduleDAGVLIW
+		(d) ScheduleDAGVLIW
+
+	2）
 
 Section 3: Opcode flow
 
@@ -522,7 +526,7 @@ Section 3: Opcode flow
 	DAG: CodeGen/TargetOpcode.h and TargetInstr.td.
 	|
 	|
-	(by) CodeGen/InstrEmitter invoke BuildMI(TII.get(Opc))
+	(by)CodeGen/InstrEmitter invoke BuildMI(TII.get(Opc))
 	|
 	|
 	MachineInstr: MachineOpcode defined by TargetInstrInfo.td in which every instruction 
